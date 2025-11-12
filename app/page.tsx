@@ -60,14 +60,14 @@ export default function Home() {
   // Evitar renderizar hasta que estemos en el cliente para evitar problemas de hidratación
   if (!isClient) {
     return (
-      <main className="min-h-screen bg-background flex items-center justify-center" suppressHydrationWarning>
-        <div className="text-muted-foreground" suppressHydrationWarning>Cargando...</div>
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Cargando...</div>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-background" suppressHydrationWarning>
+    <main className="min-h-screen bg-background">
       {!user ? (
         <LoginForm onLogin={handleLogin} />
       ) : (
