@@ -34,11 +34,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const isProduction = process.env.NODE_ENV === 'production'
+  
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={`font-sans antialiased`} suppressHydrationWarning>
         {children}
-        <Analytics />
+        {isProduction && <Analytics />}
       </body>
     </html>
   )
