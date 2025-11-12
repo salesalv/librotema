@@ -15,10 +15,19 @@ export default function Home() {
   useEffect(() => {
     setIsClient(true)
     const init = async () => {
-      await initializeData()
-      const currentUser = getCurrentUser()
-      if (currentUser) {
-        setUser(currentUser)
+      try {
+        await initializeData()
+        const currentUser = getCurrentUser()
+        if (currentUser) {
+          setUser(currentUser)
+        }
+      } catch (error) {
+        console.error('Error al inicializar datos:', error)
+        // Continuar incluso si hay un error
+        const currentUser = getCurrentUser()
+        if (currentUser) {
+          setUser(currentUser)
+        }
       }
     }
     init()
