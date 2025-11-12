@@ -8,7 +8,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 // Verificar si Supabase está configurado
 export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey)
 
-if (!isSupabaseConfigured) {
+// Solo mostrar warning en el cliente para evitar problemas en Edge Runtime
+if (typeof window !== 'undefined' && !isSupabaseConfigured) {
   console.warn(
     '⚠️ Supabase no está configurado. El sistema usará localStorage. Por favor, configura NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY en tu archivo .env.local'
   )
