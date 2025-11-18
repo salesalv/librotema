@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { LogOut, BookOpen, CheckCircle, ChevronDown, ChevronRight } from "lucide-react"
+import { LogOut, BookOpen, CheckCircle, ChevronDown, ChevronRight, Download } from "lucide-react"
 import type { User, Logbook, ClassSession, Subject, Course } from "@/lib/types"
 import {
   getUsers,
@@ -17,6 +17,7 @@ import {
   getTeacherSubjects,
   addOrUpdateLogbook,
 } from "@/lib/storage-index"
+import { generateLogbookPDF } from "@/lib/pdf-generator"
 import { toast } from "sonner"
 
 interface DirectorDashboardProps {
@@ -118,6 +119,19 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
     }
   }
 
+  const handleDownloadPDF = (logbook: Logbook) => {
+    const subjectName = getSubjectName(logbook.subjectId)
+    const courseName = getCourseName(logbook.courseId)
+    const teacherName = getTeacherName(logbook.teacherId)
+    
+    generateLogbookPDF({
+      logbook,
+      teacherName,
+      subjectName,
+      courseName
+    })
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -205,6 +219,18 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
                             <Badge variant="secondary" className="text-sm">
                               {verifiedCount} / {logbook.sessions.length} verificadas
                             </Badge>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleDownloadPDF(logbook)
+                              }}
+                              className="border-primary/30 hover:bg-primary/10"
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Descargar PDF
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"

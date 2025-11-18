@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
-import { LogOut, BookOpen, Plus, CheckCircle, Eye } from "lucide-react"
+import { LogOut, BookOpen, Plus, CheckCircle, Eye, Download } from "lucide-react"
 import type { User, Logbook, ClassSession, ClassCharacter } from "@/lib/types"
 import {
   getSubjects,
@@ -21,6 +21,7 @@ import {
   getLogbookByTeacherAndSubject,
   addOrUpdateLogbook,
 } from "@/lib/storage-index"
+import { generateLogbookPDF } from "@/lib/pdf-generator"
 
 interface TeacherDashboardProps {
   user: User
@@ -189,6 +190,18 @@ export function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
     }
   }
 
+  const handleDownloadPDF = (logbook: Logbook) => {
+    const subjectName = getSubjectName(logbook.subjectId)
+    const courseName = getCourseName(logbook.courseId)
+    
+    generateLogbookPDF({
+      logbook,
+      teacherName: user.name,
+      subjectName,
+      courseName
+    })
+  }
+
   const classCharacters: ClassCharacter[] = [
     "Presentación",
     "Teórica",
@@ -263,9 +276,20 @@ export function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
                           {logbook.sessions.length} {logbook.sessions.length === 1 ? "clase" : "clases"} registradas
                         </CardDescription>
                       </div>
-                      <Badge variant="secondary">
-                        {verifiedCount} verificadas por profesor
-                      </Badge>
+                      <div className="flex items-center gap-3">
+                        <Badge variant="secondary">
+                          {verifiedCount} verificadas por profesor
+                        </Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadPDF(logbook)}
+                          className="border-primary/30 hover:bg-primary/10"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Descargar PDF
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
