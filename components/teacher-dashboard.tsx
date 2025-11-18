@@ -35,6 +35,7 @@ export function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
   const [selectedLogbook, setSelectedLogbook] = useState<Logbook | null>(null)
   const [showNewClassForm, setShowNewClassForm] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [subjectFilter, setSubjectFilter] = useState<string>("all")
 
   const [newSession, setNewSession] = useState<Partial<ClassSession>>({
     day: undefined,
@@ -259,7 +260,51 @@ export function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
                 </CardContent>
               </Card>
             ) : (
-            logbooks.map((logbook) => {
+            <>
+              {/* Filtro de Materia */}
+              <Card className="border-primary/30">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-4">
+                    <Label htmlFor="subject-filter" className="text-base font-semibold whitespace-nowrap">
+                      Filtrar por materia:
+                    </Label>
+                    <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                      <SelectTrigger id="subject-filter" className="max-w-md">
+                        <SelectValue placeholder="Todas las materias" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas las materias</SelectItem>
+                        {Array.from(new Set(logbooks.map(l => l.subjectId))).map(subjectId => (
+                          <SelectItem key={subjectId} value={subjectId}>
+                            {getSubjectName(subjectId)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Lista de Planillas */}
+              {(() => {
+                const filteredLogbooks = logbooks.filter(logbook => 
+                  subjectFilter === "all" || logbook.subjectId === subjectFilter
+                )
+
+                if (filteredLogbooks.length === 0) {
+                  return (
+                    <Card>
+                      <CardContent className="flex flex-col items-center justify-center py-12">
+                        <BookOpen className="h-16 w-16 text-muted-foreground mb-3" />
+                        <p className="text-muted-foreground text-center">
+                          No se encontraron planillas para esta materia.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )
+                }
+
+                return filteredLogbooks.map((logbook) => {
               const subjectName = getSubjectName(logbook.subjectId)
               const courseName = getCourseName(logbook.courseId)
               const verifiedCount = logbook.sessions.filter((s) => s.teacherVerification).length
@@ -552,6 +597,8 @@ export function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
                 </Card>
               )
             })
+              })()}
+            </>
             )}
           </div>
         )}

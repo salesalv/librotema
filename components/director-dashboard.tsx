@@ -31,6 +31,7 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [courses, setCourses] = useState<Course[]>([])
   const [selectedTeacher, setSelectedTeacher] = useState<string>("")
+  const [subjectFilter, setSubjectFilter] = useState<string>("all")
   const [expandedLogbooks, setExpandedLogbooks] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -62,9 +63,18 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
     return teachers.find((u) => u.id === id)?.name || "N/A"
   }
 
-  const filteredLogbooks = selectedTeacher && selectedTeacher !== "all"
-    ? logbooks.filter((l) => l.teacherId === selectedTeacher)
-    : logbooks
+  const filteredLogbooks = logbooks
+    .filter((l) => {
+      // Filtro por profesor
+      if (selectedTeacher && selectedTeacher !== "all" && l.teacherId !== selectedTeacher) {
+        return false
+      }
+      // Filtro por materia
+      if (subjectFilter !== "all" && l.subjectId !== subjectFilter) {
+        return false
+      }
+      return true
+    })
 
   const toggleLogbook = (logbookId: string) => {
     setExpandedLogbooks((prev) => {
@@ -158,23 +168,48 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
       {/* Content */}
       <div className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="grid gap-6">
-          {/* Filtro de Profesor */}
-          <div className="flex items-center gap-4">
-            <Label>Filtrar por Profesor:</Label>
-            <Select value={selectedTeacher || "all"} onValueChange={(value) => setSelectedTeacher(value === "all" ? "" : value)}>
-              <SelectTrigger className="w-[250px]">
-                <SelectValue placeholder="Todos los profesores" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los profesores</SelectItem>
-                {teachers.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Filtros */}
+          <Card className="border-primary/30">
+            <CardContent className="pt-6">
+              <div className="flex flex-col md:flex-row gap-4">
+                {/* Filtro de Profesor */}
+                <div className="flex items-center gap-4 flex-1">
+                  <Label htmlFor="teacher-filter" className="whitespace-nowrap font-semibold">Filtrar por Profesor:</Label>
+                  <Select value={selectedTeacher || "all"} onValueChange={(value) => setSelectedTeacher(value === "all" ? "" : value)}>
+                    <SelectTrigger id="teacher-filter" className="w-full max-w-xs">
+                      <SelectValue placeholder="Todos los profesores" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los profesores</SelectItem>
+                      {teachers.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Filtro de Materia */}
+                <div className="flex items-center gap-4 flex-1">
+                  <Label htmlFor="subject-filter" className="whitespace-nowrap font-semibold">Filtrar por Materia:</Label>
+                  <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                    <SelectTrigger id="subject-filter" className="w-full max-w-xs">
+                      <SelectValue placeholder="Todas las materias" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas las materias</SelectItem>
+                      {subjects.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Libros de Temas */}
           <Card>

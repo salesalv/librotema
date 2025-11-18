@@ -229,6 +229,14 @@ export function deleteTeacherSubject(id: string): void {
   saveTeacherSubjects(filteredTeacherSubjects)
 }
 
+export function deleteMultipleTeacherSubjects(ids: string[]): void {
+  if (typeof window === "undefined")
+    throw new Error("No se puede acceder a localStorage en el servidor")
+  const teacherSubjects = getTeacherSubjects()
+  const filteredTeacherSubjects = teacherSubjects.filter((ts) => !ids.includes(ts.id))
+  saveTeacherSubjects(filteredTeacherSubjects)
+}
+
 // Funciones para Libros de Temas
 export function getLogbooks(): Logbook[] {
   if (typeof window === "undefined") return []

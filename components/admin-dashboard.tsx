@@ -11,28 +11,29 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { LogOut, Users, BookOpen, GraduationCap, UserPlus, Plus, X, Pencil, Trash2, Search } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { LogOut, Users, BookOpen, GraduationCap, UserPlus, Plus, X, Pencil, Search } from "lucide-react"
 import type { User, Subject, Course, SubjectCourse, TeacherSubject } from "@/lib/types"
 import {
   getUsers,
   addUser,
   updateUser,
-  deleteUser,
+  deleteMultipleUsers,
   getSubjects,
   addSubject,
   updateSubject,
-  deleteSubject,
+  deleteMultipleSubjects,
   getCourses,
   addCourse,
   updateCourse,
-  deleteCourse,
+  deleteMultipleCourses,
   getSubjectCourses,
   addSubjectCourse,
   deleteSubjectCourse,
   getTeacherSubjects,
   addTeacherSubject,
   updateTeacherSubject,
-  deleteTeacherSubject,
+  deleteMultipleTeacherSubjects,
 } from "@/lib/storage-index"
 import { toast } from "sonner"
 
@@ -52,19 +53,13 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   // Estados para controlar los diálogos
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isSubjectDialogOpen, setIsSubjectDialogOpen] = useState(false)
   const [isEditSubjectDialogOpen, setIsEditSubjectDialogOpen] = useState(false)
-  const [isDeleteSubjectDialogOpen, setIsDeleteSubjectDialogOpen] = useState(false)
   const [isCourseDialogOpen, setIsCourseDialogOpen] = useState(false)
   const [isEditCourseDialogOpen, setIsEditCourseDialogOpen] = useState(false)
-  const [isDeleteCourseDialogOpen, setIsDeleteCourseDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [deletingUser, setDeletingUser] = useState<{ id: string; name: string } | null>(null)
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null)
-  const [deletingSubject, setDeletingSubject] = useState<{ id: string; name: string } | null>(null)
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
-  const [deletingCourse, setDeletingCourse] = useState<{ id: string; name: string } | null>(null)
 
   // Estados para formularios
   const [newUser, setNewUser] = useState({ dni: "", name: "", password: "", role: "profesor" as User["role"] })
@@ -86,17 +81,21 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [showSubjectForTeacherDropdown, setShowSubjectForTeacherDropdown] = useState(false)
   const [showCourseForTeacherDropdown, setShowCourseForTeacherDropdown] = useState(false)
   
-  // Estados para editar/eliminar asignación de profesor
+  // Estados para editar asignación de profesor
   const [isEditTeacherSubjectDialogOpen, setIsEditTeacherSubjectDialogOpen] = useState(false)
-  const [isDeleteTeacherSubjectDialogOpen, setIsDeleteTeacherSubjectDialogOpen] = useState(false)
   const [editingTeacher, setEditingTeacher] = useState<{ id: string; name: string } | null>(null)
   const [teacherAssignments, setTeacherAssignments] = useState<Array<{ subjectId: string; courseId: string }>>([])
   const [originalTeacherAssignments, setOriginalTeacherAssignments] = useState<Array<{ id: string; subjectId: string; courseId: string }>>([])
-  const [deletingTeacherSubject, setDeletingTeacherSubject] = useState<{ id: string; name: string } | null>(null)
   const [searchSubjectForEdit, setSearchSubjectForEdit] = useState("")
   const [searchCourseForEdit, setSearchCourseForEdit] = useState("")
   const [selectedSubjectId, setSelectedSubjectId] = useState("")
   const [selectedCourseId, setSelectedCourseId] = useState("")
+
+  // Estados para selección múltiple
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set())
+  const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(new Set())
+  const [selectedCourses, setSelectedCourses] = useState<Set<string>>(new Set())
+  const [selectedTeachers, setSelectedTeachers] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadData()
@@ -282,34 +281,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     }
   }
 
-  const openDeleteDialog = (userId: string, userName: string) => {
-    setDeletingUser({ id: userId, name: userName })
-    setIsDeleteDialogOpen(true)
-  }
-
-  const handleDeleteUser = async () => {
-    if (!deletingUser) return
-
-    try {
-      await deleteUser(deletingUser.id)
-
-      // Actualizar la lista de usuarios en memoria
-      setUsers(users.filter((u) => u.id !== deletingUser.id))
-
-      // Cerrar el diálogo
-      setIsDeleteDialogOpen(false)
-      setDeletingUser(null)
-
-      toast.success("Usuario eliminado", {
-        description: `El usuario ${deletingUser.name} ha sido eliminado correctamente.`,
-      })
-    } catch (error: any) {
-      console.error("Error al eliminar usuario:", error)
-      toast.error("Error al eliminar usuario", {
-        description: error?.message || "Ocurrió un error inesperado al intentar eliminar el usuario.",
-      })
-    }
-  }
 
   const openEditDialog = (user: User) => {
     setEditingUser(user)
@@ -326,11 +297,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     setEditingSubject(subject)
     setEditSubject({ name: subject.name })
     setIsEditSubjectDialogOpen(true)
-  }
-
-  const openDeleteSubjectDialog = (subjectId: string, subjectName: string) => {
-    setDeletingSubject({ id: subjectId, name: subjectName })
-    setIsDeleteSubjectDialogOpen(true)
   }
 
   const handleEditSubject = async () => {
@@ -374,30 +340,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       console.error("Error al actualizar materia:", error)
       toast.error("Error al actualizar materia", {
         description: error?.message || "Ocurrió un error inesperado al intentar actualizar la materia.",
-      })
-    }
-  }
-
-  const handleDeleteSubject = async () => {
-    if (!deletingSubject) return
-
-    try {
-      await deleteSubject(deletingSubject.id)
-
-      // Actualizar la lista en memoria
-      setSubjects(subjects.filter((s) => s.id !== deletingSubject.id))
-
-      // Cerrar el diálogo
-      setIsDeleteSubjectDialogOpen(false)
-      setDeletingSubject(null)
-
-      toast.success("Materia eliminada", {
-        description: `La materia ${deletingSubject.name} ha sido eliminada correctamente.`,
-      })
-    } catch (error: any) {
-      console.error("Error al eliminar materia:", error)
-      toast.error("Error al eliminar materia", {
-        description: error?.message || "Ocurrió un error inesperado al intentar eliminar la materia.",
       })
     }
   }
@@ -456,11 +398,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     setOriginalCourseSubjects(assignedSubjects) // Guardar el estado original
     
     setIsEditCourseDialogOpen(true)
-  }
-
-  const openDeleteCourseDialog = (courseId: string, courseName: string) => {
-    setDeletingCourse({ id: courseId, name: courseName })
-    setIsDeleteCourseDialogOpen(true)
   }
 
   const handleAddSubjectToCourse = (subjectId: string) => {
@@ -562,30 +499,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       console.error("Error al actualizar curso:", error)
       toast.error("Error al actualizar curso", {
         description: error?.message || "Ocurrió un error inesperado al intentar actualizar el curso.",
-      })
-    }
-  }
-
-  const handleDeleteCourse = async () => {
-    if (!deletingCourse) return
-
-    try {
-      await deleteCourse(deletingCourse.id)
-
-      // Actualizar la lista en memoria
-      setCourses(courses.filter((c) => c.id !== deletingCourse.id))
-
-      // Cerrar el diálogo
-      setIsDeleteCourseDialogOpen(false)
-      setDeletingCourse(null)
-
-      toast.success("Curso eliminado", {
-        description: `El curso ${deletingCourse.name} ha sido eliminado correctamente.`,
-      })
-    } catch (error: any) {
-      console.error("Error al eliminar curso:", error)
-      toast.error("Error al eliminar curso", {
-        description: error?.message || "Ocurrió un error inesperado al intentar eliminar el curso.",
       })
     }
   }
@@ -755,17 +668,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     )
   }
 
-  const openDeleteTeacherSubjectDialog = (ts: TeacherSubject) => {
-    const teacherName = users.find((u) => u.id === ts.teacherId)?.name || "N/A"
-    const subjectName = subjects.find((s) => s.id === ts.subjectId)?.name || "N/A"
-    const courseName = courses.find((c) => c.id === ts.courseId)?.name || "N/A"
-    setDeletingTeacherSubject({
-      id: ts.id,
-      name: `${teacherName} - ${subjectName} - ${courseName}`,
-    })
-    setIsDeleteTeacherSubjectDialogOpen(true)
-  }
-
   const handleEditTeacherSubject = async () => {
     if (!editingTeacher) return
 
@@ -842,26 +744,170 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     }
   }
 
-  const handleDeleteTeacherSubject = async () => {
-    if (!deletingTeacherSubject) return
+  // Funciones para selección múltiple de Usuarios
+  const toggleUserSelection = (id: string) => {
+    const newSelection = new Set(selectedUsers)
+    if (newSelection.has(id)) {
+      newSelection.delete(id)
+    } else {
+      newSelection.add(id)
+    }
+    setSelectedUsers(newSelection)
+  }
+
+  const toggleAllUsers = () => {
+    if (selectedUsers.size === users.length) {
+      setSelectedUsers(new Set())
+    } else {
+      setSelectedUsers(new Set(users.map(u => u.id)))
+    }
+  }
+
+  const handleDeleteSelectedUsers = async () => {
+    if (selectedUsers.size === 0) return
+    
+    if (!confirm(`¿Está seguro de eliminar ${selectedUsers.size} usuario(s)?`)) {
+      return
+    }
 
     try {
-      await deleteTeacherSubject(deletingTeacherSubject.id)
-
-      // Actualizar la lista en memoria
-      setTeacherSubjects(teacherSubjects.filter((ts) => ts.id !== deletingTeacherSubject.id))
-
-      // Cerrar el diálogo y limpiar el estado
-      setIsDeleteTeacherSubjectDialogOpen(false)
-      setDeletingTeacherSubject(null)
-
-      toast.success("Asignación eliminada", {
-        description: "La asignación ha sido eliminada correctamente.",
+      await deleteMultipleUsers(Array.from(selectedUsers))
+      setSelectedUsers(new Set())
+      await loadData()
+      toast.success("Usuarios eliminados", {
+        description: `${selectedUsers.size} usuario(s) eliminado(s) correctamente.`,
       })
     } catch (error: any) {
-      console.error("Error al eliminar asignación:", error)
-      toast.error("Error al eliminar asignación", {
-        description: error?.message || "Ocurrió un error inesperado al intentar eliminar la asignación.",
+      toast.error("Error al eliminar usuarios", {
+        description: error?.message || "Ocurrió un error inesperado.",
+      })
+    }
+  }
+
+  // Funciones para selección múltiple de Materias
+  const toggleSubjectSelection = (id: string) => {
+    const newSelection = new Set(selectedSubjects)
+    if (newSelection.has(id)) {
+      newSelection.delete(id)
+    } else {
+      newSelection.add(id)
+    }
+    setSelectedSubjects(newSelection)
+  }
+
+  const toggleAllSubjects = () => {
+    if (selectedSubjects.size === subjects.length) {
+      setSelectedSubjects(new Set())
+    } else {
+      setSelectedSubjects(new Set(subjects.map(s => s.id)))
+    }
+  }
+
+  const handleDeleteSelectedSubjects = async () => {
+    if (selectedSubjects.size === 0) return
+    
+    if (!confirm(`¿Está seguro de eliminar ${selectedSubjects.size} materia(s)?`)) {
+      return
+    }
+
+    try {
+      await deleteMultipleSubjects(Array.from(selectedSubjects))
+      setSelectedSubjects(new Set())
+      await loadData()
+      toast.success("Materias eliminadas", {
+        description: `${selectedSubjects.size} materia(s) eliminada(s) correctamente.`,
+      })
+    } catch (error: any) {
+      toast.error("Error al eliminar materias", {
+        description: error?.message || "Ocurrió un error inesperado.",
+      })
+    }
+  }
+
+  // Funciones para selección múltiple de Cursos
+  const toggleCourseSelection = (id: string) => {
+    const newSelection = new Set(selectedCourses)
+    if (newSelection.has(id)) {
+      newSelection.delete(id)
+    } else {
+      newSelection.add(id)
+    }
+    setSelectedCourses(newSelection)
+  }
+
+  const toggleAllCourses = () => {
+    if (selectedCourses.size === courses.length) {
+      setSelectedCourses(new Set())
+    } else {
+      setSelectedCourses(new Set(courses.map(c => c.id)))
+    }
+  }
+
+  const handleDeleteSelectedCourses = async () => {
+    if (selectedCourses.size === 0) return
+    
+    if (!confirm(`¿Está seguro de eliminar ${selectedCourses.size} curso(s)?`)) {
+      return
+    }
+
+    try {
+      await deleteMultipleCourses(Array.from(selectedCourses))
+      setSelectedCourses(new Set())
+      await loadData()
+      toast.success("Cursos eliminados", {
+        description: `${selectedCourses.size} curso(s) eliminado(s) correctamente.`,
+      })
+    } catch (error: any) {
+      toast.error("Error al eliminar cursos", {
+        description: error?.message || "Ocurrió un error inesperado.",
+      })
+    }
+  }
+
+  // Funciones para selección múltiple de Asignaciones
+  const toggleTeacherSelection = (teacherId: string) => {
+    const newSelection = new Set(selectedTeachers)
+    if (newSelection.has(teacherId)) {
+      newSelection.delete(teacherId)
+    } else {
+      newSelection.add(teacherId)
+    }
+    setSelectedTeachers(newSelection)
+  }
+
+  const toggleAllTeachers = () => {
+    // Obtener todos los teacherIds únicos
+    const allTeacherIds = Array.from(new Set(teacherSubjects.map(ts => ts.teacherId)))
+    
+    if (selectedTeachers.size === allTeacherIds.length) {
+      setSelectedTeachers(new Set())
+    } else {
+      setSelectedTeachers(new Set(allTeacherIds))
+    }
+  }
+
+  const handleDeleteSelectedTeachers = async () => {
+    if (selectedTeachers.size === 0) return
+    
+    // Obtener todas las asignaciones de los profesores seleccionados
+    const assignmentIdsToDelete = teacherSubjects
+      .filter(ts => selectedTeachers.has(ts.teacherId))
+      .map(ts => ts.id)
+    
+    if (!confirm(`¿Está seguro de eliminar todas las asignaciones de ${selectedTeachers.size} profesor(es)?`)) {
+      return
+    }
+
+    try {
+      await deleteMultipleTeacherSubjects(assignmentIdsToDelete)
+      setSelectedTeachers(new Set())
+      await loadData()
+      toast.success("Asignaciones eliminadas", {
+        description: `Se eliminaron ${assignmentIdsToDelete.length} asignación(es) de ${selectedTeachers.size} profesor(es).`,
+      })
+    } catch (error: any) {
+      toast.error("Error al eliminar asignaciones", {
+        description: error?.message || "Ocurrió un error inesperado.",
       })
     }
   }
@@ -921,65 +967,78 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <CardTitle>Gestión de Usuarios</CardTitle>
                     <CardDescription>Crear y administrar usuarios del sistema</CardDescription>
                   </div>
-                  <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-primary hover:bg-primary/90">
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Crear Usuario
+                  <div className="flex items-center gap-2">
+                    {selectedUsers.size > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleDeleteSelectedUsers}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Eliminar {selectedUsers.size} {selectedUsers.size === 1 ? 'usuario' : 'usuarios'}
                       </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Crear Nuevo Usuario</DialogTitle>
-                        <DialogDescription>Complete los datos del nuevo usuario</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label>DNI</Label>
-                          <Input
-                            value={newUser.dni}
-                            onChange={(e) => setNewUser({ ...newUser, dni: e.target.value })}
-                            placeholder="Ingrese el DNI"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Nombre</Label>
-                          <Input
-                            value={newUser.name}
-                            onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                            placeholder="Ingrese el nombre"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Contraseña</Label>
-                          <Input
-                            type="password"
-                            value={newUser.password}
-                            onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                            placeholder="Ingrese la contraseña"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Rol</Label>
-                          <Select
-                            value={newUser.role}
-                            onValueChange={(value) => setNewUser({ ...newUser, role: value as User["role"] })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="director">Director</SelectItem>
-                              <SelectItem value="profesor">Profesor</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button onClick={handleAddUser} className="w-full bg-primary hover:bg-primary/90">
+                    )}
+                    <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button className="bg-primary hover:bg-primary/90">
+                          <UserPlus className="h-4 w-4 mr-2" />
                           Crear Usuario
                         </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Crear Nuevo Usuario</DialogTitle>
+                          <DialogDescription>Complete los datos del nuevo usuario</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label>DNI</Label>
+                            <Input
+                              value={newUser.dni}
+                              onChange={(e) => setNewUser({ ...newUser, dni: e.target.value })}
+                              placeholder="Ingrese el DNI"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Nombre</Label>
+                            <Input
+                              value={newUser.name}
+                              onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                              placeholder="Ingrese el nombre"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Contraseña</Label>
+                            <Input
+                              type="password"
+                              value={newUser.password}
+                              onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                              placeholder="Ingrese la contraseña"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Rol</Label>
+                            <Select
+                              value={newUser.role}
+                              onValueChange={(value) => setNewUser({ ...newUser, role: value as User["role"] })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="director">Director</SelectItem>
+                                <SelectItem value="profesor">Profesor</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button onClick={handleAddUser} className="w-full bg-primary hover:bg-primary/90">
+                            Crear Usuario
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -998,7 +1057,15 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         <TableHead>Nombre</TableHead>
                         <TableHead>Rol</TableHead>
                         <TableHead>Fecha de Creación</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
+                        <TableHead className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <span>Acciones</span>
+                            <Checkbox
+                              checked={selectedUsers.size === users.length && users.length > 0}
+                              onCheckedChange={toggleAllUsers}
+                            />
+                          </div>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1031,14 +1098,10 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                                   >
                                     <Pencil className="h-4 w-4" />
                                   </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => openDeleteDialog(u.id, u.name)}
-                                    className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                  <Checkbox
+                                    checked={selectedUsers.has(u.id)}
+                                    onCheckedChange={() => toggleUserSelection(u.id)}
+                                  />
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -1063,7 +1126,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <Input
                       value={editUser.dni}
                       onChange={(e) => setEditUser({ ...editUser, dni: e.target.value })}
+                      onFocus={(e) => {
+                        e.target.setSelectionRange(e.target.value.length, e.target.value.length)
+                      }}
                       placeholder="Ingrese el DNI"
+                      autoComplete="off"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1071,7 +1138,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <Input
                       value={editUser.name}
                       onChange={(e) => setEditUser({ ...editUser, name: e.target.value })}
+                      onFocus={(e) => {
+                        e.target.setSelectionRange(e.target.value.length, e.target.value.length)
+                      }}
                       placeholder="Ingrese el nombre"
+                      autoComplete="off"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1080,7 +1151,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                       type="password"
                       value={editUser.password}
                       onChange={(e) => setEditUser({ ...editUser, password: e.target.value })}
+                      onFocus={(e) => {
+                        e.target.setSelectionRange(e.target.value.length, e.target.value.length)
+                      }}
                       placeholder="Ingrese la contraseña"
+                      autoComplete="off"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1105,31 +1180,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               </DialogContent>
             </Dialog>
 
-            {/* Diálogo de Confirmación de Eliminación */}
-            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Eliminar Usuario</DialogTitle>
-                  <DialogDescription>
-                    ¿Está seguro de que desea eliminar al usuario "{deletingUser?.name}"?
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsDeleteDialogOpen(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={handleDeleteUser}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    Aceptar
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
           </TabsContent>
 
           {/* Tab Materias */}
@@ -1141,33 +1191,46 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <CardTitle>Gestión de Materias</CardTitle>
                     <CardDescription>Crear y administrar materias</CardDescription>
                   </div>
-                  <Dialog open={isSubjectDialogOpen} onOpenChange={setIsSubjectDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-primary hover:bg-primary/90">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Crear Materia
+                  <div className="flex items-center gap-2">
+                    {selectedSubjects.size > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleDeleteSelectedSubjects}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Eliminar {selectedSubjects.size} {selectedSubjects.size === 1 ? 'materia' : 'materias'}
                       </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Crear Nueva Materia</DialogTitle>
-                        <DialogDescription>Ingrese el nombre de la materia</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label>Nombre de la Materia</Label>
-                          <Input
-                            value={newSubject.name}
-                            onChange={(e) => setNewSubject({ name: e.target.value })}
-                            placeholder="Ej: Matemática"
-                          />
-                        </div>
-                        <Button onClick={handleAddSubject} className="w-full bg-primary hover:bg-primary/90">
+                    )}
+                    <Dialog open={isSubjectDialogOpen} onOpenChange={setIsSubjectDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button className="bg-primary hover:bg-primary/90">
+                          <Plus className="h-4 w-4 mr-2" />
                           Crear Materia
                         </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Crear Nueva Materia</DialogTitle>
+                          <DialogDescription>Ingrese el nombre de la materia</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label>Nombre de la Materia</Label>
+                            <Input
+                              value={newSubject.name}
+                              onChange={(e) => setNewSubject({ name: e.target.value })}
+                              placeholder="Ej: Matemática"
+                            />
+                          </div>
+                          <Button onClick={handleAddSubject} className="w-full bg-primary hover:bg-primary/90">
+                            Crear Materia
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1176,7 +1239,15 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <TableRow>
                       <TableHead>Nombre</TableHead>
                       <TableHead>Fecha de Creación</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
+                      <TableHead className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <span>Acciones</span>
+                          <Checkbox
+                            checked={selectedSubjects.size === subjects.length && subjects.length > 0}
+                            onCheckedChange={toggleAllSubjects}
+                          />
+                        </div>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1201,14 +1272,10 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openDeleteSubjectDialog(s.id, s.name)}
-                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <Checkbox
+                                checked={selectedSubjects.has(s.id)}
+                                onCheckedChange={() => toggleSubjectSelection(s.id)}
+                              />
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1232,7 +1299,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <Input
                       value={editSubject.name}
                       onChange={(e) => setEditSubject({ name: e.target.value })}
+                      onFocus={(e) => {
+                        e.target.setSelectionRange(e.target.value.length, e.target.value.length)
+                      }}
                       placeholder="Ej: Matemática"
+                      autoComplete="off"
                     />
                   </div>
                   <Button onClick={handleEditSubject} className="w-full bg-blue-600 hover:bg-blue-700">
@@ -1242,25 +1313,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               </DialogContent>
             </Dialog>
 
-            {/* Diálogo de Confirmación de Eliminación de Materia */}
-            <Dialog open={isDeleteSubjectDialogOpen} onOpenChange={setIsDeleteSubjectDialogOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Eliminar Materia</DialogTitle>
-                  <DialogDescription>
-                    ¿Está seguro de que desea eliminar la materia "{deletingSubject?.name}"?
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setIsDeleteSubjectDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={handleDeleteSubject} className="bg-red-600 hover:bg-red-700">
-                    Aceptar
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
           </TabsContent>
 
           {/* Tab Cursos */}
@@ -1272,33 +1324,46 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <CardTitle>Gestión de Cursos</CardTitle>
                     <CardDescription>Crear y administrar cursos</CardDescription>
                   </div>
-                  <Dialog open={isCourseDialogOpen} onOpenChange={setIsCourseDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-primary hover:bg-primary/90">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Crear Curso
+                  <div className="flex items-center gap-2">
+                    {selectedCourses.size > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleDeleteSelectedCourses}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Eliminar {selectedCourses.size} {selectedCourses.size === 1 ? 'curso' : 'cursos'}
                       </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Crear Nuevo Curso</DialogTitle>
-                        <DialogDescription>Ingrese el nombre del curso</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Label>Nombre del Curso</Label>
-                          <Input
-                            value={newCourse.name}
-                            onChange={(e) => setNewCourse({ name: e.target.value })}
-                            placeholder="Ej: 3° A"
-                          />
-                        </div>
-                        <Button onClick={handleAddCourse} className="w-full bg-primary hover:bg-primary/90">
+                    )}
+                    <Dialog open={isCourseDialogOpen} onOpenChange={setIsCourseDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button className="bg-primary hover:bg-primary/90">
+                          <Plus className="h-4 w-4 mr-2" />
                           Crear Curso
                         </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Crear Nuevo Curso</DialogTitle>
+                          <DialogDescription>Ingrese el nombre del curso</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label>Nombre del Curso</Label>
+                            <Input
+                              value={newCourse.name}
+                              onChange={(e) => setNewCourse({ name: e.target.value })}
+                              placeholder="Ej: 3° A"
+                            />
+                          </div>
+                          <Button onClick={handleAddCourse} className="w-full bg-primary hover:bg-primary/90">
+                            Crear Curso
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1308,7 +1373,15 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                       <TableHead>Nombre</TableHead>
                       <TableHead>Materias Asignadas</TableHead>
                       <TableHead>Fecha de Creación</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
+                      <TableHead className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <span>Acciones</span>
+                          <Checkbox
+                            checked={selectedCourses.size === courses.length && courses.length > 0}
+                            onCheckedChange={toggleAllCourses}
+                          />
+                        </div>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1358,14 +1431,10 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => openDeleteCourseDialog(c.id, c.name)}
-                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <Checkbox
+                                  checked={selectedCourses.has(c.id)}
+                                  onCheckedChange={() => toggleCourseSelection(c.id)}
+                                />
                               </div>
                             </TableCell>
                           </TableRow>
@@ -1391,7 +1460,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <Input
                       value={editCourse.name}
                       onChange={(e) => setEditCourse({ name: e.target.value })}
+                      onFocus={(e) => {
+                        e.target.setSelectionRange(e.target.value.length, e.target.value.length)
+                      }}
                       placeholder="Ej: 3° A"
+                      autoComplete="off"
                     />
                   </div>
 
@@ -1475,25 +1548,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               </DialogContent>
             </Dialog>
 
-            {/* Diálogo de Confirmación de Eliminación de Curso */}
-            <Dialog open={isDeleteCourseDialogOpen} onOpenChange={setIsDeleteCourseDialogOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Eliminar Curso</DialogTitle>
-                  <DialogDescription>
-                    ¿Está seguro de que desea eliminar el curso "{deletingCourse?.name}"?
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setIsDeleteCourseDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={handleDeleteCourse} className="bg-red-600 hover:bg-red-700">
-                    Aceptar
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
           </TabsContent>
 
           {/* Tab Asignaciones */}
@@ -1503,7 +1557,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               <Card>
                 <CardHeader>
                   <CardTitle>Asignar Profesor a Materia</CardTitle>
-                  <CardDescription>Asigne profesores a materias y cursos</CardDescription>
+                  <CardDescription>Seleccione profesor, luego curso, y finalmente la materia del curso</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Búsqueda de Profesor */}
@@ -1568,68 +1622,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     )}
                   </div>
 
-                  {/* Búsqueda de Materia */}
-                  <div className="space-y-2">
-                    <Label>Materia</Label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        value={searchSubjectForTeacher}
-                        onChange={(e) => {
-                          setSearchSubjectForTeacher(e.target.value)
-                          setShowSubjectForTeacherDropdown(true)
-                        }}
-                        onFocus={() => setShowSubjectForTeacherDropdown(true)}
-                        placeholder="Buscar materia..."
-                        className="pl-9"
-                      />
-                    </div>
-                    {showSubjectForTeacherDropdown && searchSubjectForTeacher && (
-                      <div className="relative">
-                        <div className="absolute z-50 w-full max-h-48 overflow-y-auto border rounded-md bg-white shadow-lg">
-                          {subjects
-                            .filter((s) => s.name.toLowerCase().includes(searchSubjectForTeacher.toLowerCase()))
-                            .map((subject) => (
-                              <div
-                                key={subject.id}
-                                className="flex items-center justify-between p-3 hover:bg-secondary/50 cursor-pointer border-b last:border-b-0"
-                                onClick={() => {
-                                  setNewTeacherSubject({ ...newTeacherSubject, subjectId: subject.id })
-                                  setSearchSubjectForTeacher(subject.name)
-                                  setShowSubjectForTeacherDropdown(false)
-                                }}
-                              >
-                                <span className="text-sm">{subject.name}</span>
-                              </div>
-                            ))}
-                          {subjects.filter((s) => s.name.toLowerCase().includes(searchSubjectForTeacher.toLowerCase())).length === 0 && (
-                            <div className="text-sm text-muted-foreground py-4 text-center">
-                              No se encontraron materias
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {newTeacherSubject.subjectId && !showSubjectForTeacherDropdown && (
-                      <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
-                        <span className="text-sm font-medium text-blue-700">
-                          {subjects.find((s) => s.id === newTeacherSubject.subjectId)?.name}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setNewTeacherSubject({ ...newTeacherSubject, subjectId: "" })
-                            setSearchSubjectForTeacher("")
-                          }}
-                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ml-auto"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
                   {/* Búsqueda de Curso */}
                   <div className="space-y-2">
                     <Label>Curso</Label>
@@ -1656,8 +1648,10 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                                 key={course.id}
                                 className="flex items-center justify-between p-3 hover:bg-secondary/50 cursor-pointer border-b last:border-b-0"
                                 onClick={() => {
-                                  setNewTeacherSubject({ ...newTeacherSubject, courseId: course.id })
+                                  // Limpiar materia cuando se cambia el curso
+                                  setNewTeacherSubject({ ...newTeacherSubject, courseId: course.id, subjectId: "" })
                                   setSearchCourseForTeacher(course.name)
+                                  setSearchSubjectForTeacher("")
                                   setShowCourseForTeacherDropdown(false)
                                 }}
                               >
@@ -1681,14 +1675,103 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                           variant="ghost"
                           size="sm"
                           onClick={() => {
-                            setNewTeacherSubject({ ...newTeacherSubject, courseId: "" })
+                            setNewTeacherSubject({ ...newTeacherSubject, courseId: "", subjectId: "" })
                             setSearchCourseForTeacher("")
+                            setSearchSubjectForTeacher("")
                           }}
                           className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ml-auto"
                         >
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
+                    )}
+                  </div>
+
+                  {/* Búsqueda de Materia (solo si se seleccionó curso) */}
+                  <div className="space-y-2">
+                    <Label>Materia</Label>
+                    {!newTeacherSubject.courseId ? (
+                      <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                        <span className="text-sm text-yellow-800">
+                          Primero seleccione un curso para ver las materias disponibles
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            value={searchSubjectForTeacher}
+                            onChange={(e) => {
+                              setSearchSubjectForTeacher(e.target.value)
+                              setShowSubjectForTeacherDropdown(true)
+                            }}
+                            onFocus={() => setShowSubjectForTeacherDropdown(true)}
+                            placeholder="Buscar materia..."
+                            className="pl-9"
+                          />
+                        </div>
+                        {showSubjectForTeacherDropdown && searchSubjectForTeacher && (
+                          <div className="relative">
+                            <div className="absolute z-50 w-full max-h-48 overflow-y-auto border rounded-md bg-white shadow-lg">
+                              {(() => {
+                                // Filtrar materias que pertenecen al curso seleccionado
+                                const courseSubjectIds = subjectCourses
+                                  .filter((sc) => sc.courseId === newTeacherSubject.courseId)
+                                  .map((sc) => sc.subjectId)
+                                
+                                const filteredSubjects = subjects
+                                  .filter((s) => 
+                                    courseSubjectIds.includes(s.id) &&
+                                    s.name.toLowerCase().includes(searchSubjectForTeacher.toLowerCase())
+                                  )
+                                
+                                if (filteredSubjects.length === 0) {
+                                  return (
+                                    <div className="text-sm text-muted-foreground py-4 text-center">
+                                      {courseSubjectIds.length === 0 
+                                        ? "Este curso no tiene materias asignadas" 
+                                        : "No se encontraron materias"}
+                                    </div>
+                                  )
+                                }
+                                
+                                return filteredSubjects.map((subject) => (
+                                  <div
+                                    key={subject.id}
+                                    className="flex items-center justify-between p-3 hover:bg-secondary/50 cursor-pointer border-b last:border-b-0"
+                                    onClick={() => {
+                                      setNewTeacherSubject({ ...newTeacherSubject, subjectId: subject.id })
+                                      setSearchSubjectForTeacher(subject.name)
+                                      setShowSubjectForTeacherDropdown(false)
+                                    }}
+                                  >
+                                    <span className="text-sm">{subject.name}</span>
+                                  </div>
+                                ))
+                              })()}
+                            </div>
+                          </div>
+                        )}
+                        {newTeacherSubject.subjectId && !showSubjectForTeacherDropdown && (
+                          <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                            <span className="text-sm font-medium text-blue-700">
+                              {subjects.find((s) => s.id === newTeacherSubject.subjectId)?.name}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setNewTeacherSubject({ ...newTeacherSubject, subjectId: "" })
+                                setSearchSubjectForTeacher("")
+                              }}
+                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ml-auto"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
 
@@ -1702,8 +1785,23 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
             {/* Lista de Asignaciones */}
             <Card>
               <CardHeader>
-                <CardTitle>Asignaciones de Profesores</CardTitle>
-                <CardDescription>Lista de profesores asignados a materias y cursos</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Asignaciones de Profesores</CardTitle>
+                    <CardDescription>Lista de profesores asignados a materias y cursos</CardDescription>
+                  </div>
+                  {selectedTeachers.size > 0 && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleDeleteSelectedTeachers}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Eliminar {selectedTeachers.size} {selectedTeachers.size === 1 ? 'asignación' : 'asignaciones'}
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -1711,7 +1809,15 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <TableRow>
                       <TableHead>Profesor</TableHead>
                       <TableHead>Asignaciones</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
+                      <TableHead className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <span>Acciones</span>
+                          <Checkbox
+                            checked={selectedTeachers.size === Array.from(new Set(teacherSubjects.map(ts => ts.teacherId))).length && teacherSubjects.length > 0}
+                            onCheckedChange={toggleAllTeachers}
+                          />
+                        </div>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1755,15 +1861,10 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => openDeleteTeacherSubjectDialog(assignments[0])}
-                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  title="Eliminar asignación"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <Checkbox
+                                  checked={selectedTeachers.has(teacherId)}
+                                  onCheckedChange={() => toggleTeacherSelection(teacherId)}
+                                />
                               </div>
                             </TableCell>
                           </TableRow>
@@ -1940,25 +2041,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               </DialogContent>
             </Dialog>
 
-            {/* Diálogo de Confirmación de Eliminación de Asignación */}
-            <Dialog open={isDeleteTeacherSubjectDialogOpen} onOpenChange={setIsDeleteTeacherSubjectDialogOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Eliminar Asignación</DialogTitle>
-                  <DialogDescription>
-                    ¿Está seguro de que desea eliminar la asignación de "{deletingTeacherSubject?.name}"?
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setIsDeleteTeacherSubjectDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={handleDeleteTeacherSubject} className="bg-red-600 hover:bg-red-700">
-                    Aceptar
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
           </TabsContent>
         </Tabs>
       </div>

@@ -113,6 +113,22 @@ export async function deleteUser(id: string): Promise<void> {
   }
 }
 
+export async function deleteMultipleUsers(ids: string[]): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const { error } = await supabase
+    .from('users')
+    .delete()
+    .in('id', ids)
+
+  if (error) {
+    console.error('Error deleting multiple users:', error)
+    throw error
+  }
+}
+
 export async function getUserByDni(dni: string): Promise<User | undefined> {
   if (!supabase) {
     return undefined
@@ -255,6 +271,22 @@ export async function deleteSubject(id: string): Promise<void> {
   }
 }
 
+export async function deleteMultipleSubjects(ids: string[]): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const { error } = await supabase
+    .from('subjects')
+    .delete()
+    .in('id', ids)
+
+  if (error) {
+    console.error('Error deleting multiple subjects:', error)
+    throw error
+  }
+}
+
 // Funciones para Cursos
 export async function getCourses(): Promise<Course[]> {
   return new Promise(async (resolve) => {
@@ -336,13 +368,29 @@ export async function deleteCourse(id: string): Promise<void> {
     throw new Error('Supabase no está configurado')
   }
 
-  const { error } = await supabase
+  const { error} = await supabase
     .from('courses')
     .delete()
     .eq('id', id)
 
   if (error) {
     console.error('Error deleting course:', error)
+    throw error
+  }
+}
+
+export async function deleteMultipleCourses(ids: string[]): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const { error } = await supabase
+    .from('courses')
+    .delete()
+    .in('id', ids)
+
+  if (error) {
+    console.error('Error deleting multiple courses:', error)
     throw error
   }
 }
@@ -515,6 +563,22 @@ export async function deleteTeacherSubject(id: string): Promise<void> {
 
   if (error) {
     console.error('Error deleting teacher subject:', error)
+    throw error
+  }
+}
+
+export async function deleteMultipleTeacherSubjects(ids: string[]): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const { error } = await supabase
+    .from('teacher_subjects')
+    .delete()
+    .in('id', ids)
+
+  if (error) {
+    console.error('Error deleting multiple teacher subjects:', error)
     throw error
   }
 }
