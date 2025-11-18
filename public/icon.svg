@@ -1,26 +1,23 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    @media (prefers-color-scheme: light) {
-      .background { fill: black; }
-      .foreground { fill: white; }
-    }
-    @media (prefers-color-scheme: dark) {
-      .background { fill: white; }
-      .foreground { fill: black; }
-    }
-  </style>
-  <g clip-path="url(#clip0_7960_43945)">
-    <rect class="background" width="180" height="180" rx="37" />
-    <g style="transform: scale(95%); transform-origin: center">
-      <path class="foreground"
-        d="M101.141 53H136.632C151.023 53 162.689 64.6662 162.689 79.0573V112.904H148.112V79.0573C148.112 78.7105 148.098 78.3662 148.072 78.0251L112.581 112.898C112.701 112.902 112.821 112.904 112.941 112.904H148.112V126.672H112.941C98.5504 126.672 86.5638 114.891 86.5638 100.5V66.7434H101.141V100.5C101.141 101.15 101.191 101.792 101.289 102.422L137.56 66.7816C137.255 66.7563 136.945 66.7434 136.632 66.7434H101.141V53Z" />
-      <path class="foreground"
-        d="M65.2926 124.136L14 66.7372H34.6355L64.7495 100.436V66.7372H80.1365V118.47C80.1365 126.278 70.4953 129.958 65.2926 124.136Z" />
-    </g>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <rect width="200" height="200" rx="40" fill="url(#gradient)"/>
   <defs>
-    <clipPath id="clip0_7960_43945">
-      <rect width="180" height="180" fill="white" />
-    </clipPath>
+    <linearGradient id="gradient" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
   </defs>
+  <!-- Libro abierto -->
+  <g transform="translate(40, 50)">
+    <!-- Página izquierda -->
+    <path d="M 10 10 Q 10 5 15 5 L 55 5 L 55 90 Q 55 95 50 95 L 15 95 Q 10 95 10 90 Z" fill="#93C5FD" stroke="#DBEAFE" stroke-width="2"/>
+    <path d="M 20 20 L 45 20 M 20 30 L 45 30 M 20 40 L 45 40 M 20 50 L 40 50" stroke="#1D4ED8" stroke-width="1.5" stroke-linecap="round"/>
+    
+    <!-- Página derecha -->
+    <path d="M 65 5 L 105 5 Q 110 5 110 10 L 110 90 Q 110 95 105 95 L 70 95 Q 65 95 65 90 Z" fill="#93C5FD" stroke="#DBEAFE" stroke-width="2"/>
+    <path d="M 75 20 L 100 20 M 75 30 L 100 30 M 75 40 L 100 40 M 80 50 L 100 50" stroke="#1D4ED8" stroke-width="1.5" stroke-linecap="round"/>
+    
+    <!-- Lomo del libro -->
+    <path d="M 55 5 L 65 5 L 65 95 L 55 95 Z" fill="#60A5FA"/>
+    <ellipse cx="60" cy="95" rx="5" ry="2" fill="#3B82F6"/>
+  </g>
 </svg>

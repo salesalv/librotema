@@ -35,6 +35,25 @@ export function addUser(user: Omit<User, "id" | "createdAt">): User {
   return newUser
 }
 
+export function updateUser(id: string, updates: Partial<Omit<User, "id" | "createdAt">>): User {
+  if (typeof window === "undefined") throw new Error("No se puede acceder a localStorage en el servidor")
+  const users = getUsers()
+  const index = users.findIndex((u) => u.id === id)
+  if (index === -1) throw new Error("Usuario no encontrado")
+  
+  const updatedUser = { ...users[index], ...updates }
+  users[index] = updatedUser
+  saveUsers(users)
+  return updatedUser
+}
+
+export function deleteUser(id: string): void {
+  if (typeof window === "undefined") throw new Error("No se puede acceder a localStorage en el servidor")
+  const users = getUsers()
+  const filteredUsers = users.filter((u) => u.id !== id)
+  saveUsers(filteredUsers)
+}
+
 export function getUserByDni(dni: string): User | undefined {
   return getUsers().find((u) => u.dni === dni)
 }
@@ -67,6 +86,25 @@ export function addSubject(subject: Omit<Subject, "id" | "createdAt">): Subject 
   return newSubject
 }
 
+export function updateSubject(id: string, updates: Partial<Omit<Subject, "id" | "createdAt">>): Subject {
+  if (typeof window === "undefined") throw new Error("No se puede acceder a localStorage en el servidor")
+  const subjects = getSubjects()
+  const index = subjects.findIndex((s) => s.id === id)
+  if (index === -1) throw new Error("Materia no encontrada")
+  
+  const updatedSubject = { ...subjects[index], ...updates }
+  subjects[index] = updatedSubject
+  saveSubjects(subjects)
+  return updatedSubject
+}
+
+export function deleteSubject(id: string): void {
+  if (typeof window === "undefined") throw new Error("No se puede acceder a localStorage en el servidor")
+  const subjects = getSubjects()
+  const filteredSubjects = subjects.filter((s) => s.id !== id)
+  saveSubjects(filteredSubjects)
+}
+
 // Funciones para Cursos
 export function getCourses(): Course[] {
   if (typeof window === "undefined") return []
@@ -89,6 +127,25 @@ export function addCourse(course: Omit<Course, "id" | "createdAt">): Course {
   courses.push(newCourse)
   saveCourses(courses)
   return newCourse
+}
+
+export function updateCourse(id: string, updates: Partial<Omit<Course, "id" | "createdAt">>): Course {
+  if (typeof window === "undefined") throw new Error("No se puede acceder a localStorage en el servidor")
+  const courses = getCourses()
+  const index = courses.findIndex((c) => c.id === id)
+  if (index === -1) throw new Error("Curso no encontrado")
+  
+  const updatedCourse = { ...courses[index], ...updates }
+  courses[index] = updatedCourse
+  saveCourses(courses)
+  return updatedCourse
+}
+
+export function deleteCourse(id: string): void {
+  if (typeof window === "undefined") throw new Error("No se puede acceder a localStorage en el servidor")
+  const courses = getCourses()
+  const filteredCourses = courses.filter((c) => c.id !== id)
+  saveCourses(filteredCourses)
 }
 
 // Funciones para Asignación Materia-Curso
@@ -117,6 +174,14 @@ export function addSubjectCourse(
   return newSubjectCourse
 }
 
+export function deleteSubjectCourse(id: string): void {
+  if (typeof window === "undefined")
+    throw new Error("No se puede acceder a localStorage en el servidor")
+  const subjectCourses = getSubjectCourses()
+  const filteredSubjectCourses = subjectCourses.filter((sc) => sc.id !== id)
+  saveSubjectCourses(filteredSubjectCourses)
+}
+
 // Funciones para Asignación Profesor-Materia
 export function getTeacherSubjects(): TeacherSubject[] {
   if (typeof window === "undefined") return []
@@ -143,6 +208,27 @@ export function addTeacherSubject(
   return newTeacherSubject
 }
 
+export function updateTeacherSubject(id: string, updates: Partial<Omit<TeacherSubject, "id" | "createdAt">>): TeacherSubject {
+  if (typeof window === "undefined")
+    throw new Error("No se puede acceder a localStorage en el servidor")
+  const teacherSubjects = getTeacherSubjects()
+  const index = teacherSubjects.findIndex((ts) => ts.id === id)
+  if (index === -1) throw new Error("Asignación no encontrada")
+  
+  const updatedTeacherSubject = { ...teacherSubjects[index], ...updates }
+  teacherSubjects[index] = updatedTeacherSubject
+  saveTeacherSubjects(teacherSubjects)
+  return updatedTeacherSubject
+}
+
+export function deleteTeacherSubject(id: string): void {
+  if (typeof window === "undefined")
+    throw new Error("No se puede acceder a localStorage en el servidor")
+  const teacherSubjects = getTeacherSubjects()
+  const filteredTeacherSubjects = teacherSubjects.filter((ts) => ts.id !== id)
+  saveTeacherSubjects(filteredTeacherSubjects)
+}
+
 // Funciones para Libros de Temas
 export function getLogbooks(): Logbook[] {
   if (typeof window === "undefined") return []
@@ -167,14 +253,25 @@ export function getLogbookByTeacherAndSubject(
 
 export function addOrUpdateLogbook(logbook: Logbook): Logbook {
   const logbooks = getLogbooks()
-  const index = logbooks.findIndex((l) => l.id === logbook.id)
-  if (index >= 0) {
-    logbooks[index] = { ...logbook, updatedAt: new Date().toISOString() }
+  
+  // Si no tiene ID o el ID no existe, crear uno nuevo
+  if (!logbook.id || !logbooks.find((l) => l.id === logbook.id)) {
+    const newLogbook = {
+      ...logbook,
+      id: logbook.id || Date.now().toString() + Math.random().toString(),
+      createdAt: logbook.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    logbooks.push(newLogbook)
+    saveLogbooks(logbooks)
+    return newLogbook
   } else {
-    logbooks.push(logbook)
+    // Actualizar existente
+    const index = logbooks.findIndex((l) => l.id === logbook.id)
+    logbooks[index] = { ...logbook, updatedAt: new Date().toISOString() }
+    saveLogbooks(logbooks)
+    return logbooks[index]
   }
-  saveLogbooks(logbooks)
-  return logbook
 }
 
 // Funciones para Usuario Actual

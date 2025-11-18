@@ -11,22 +11,30 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { LogOut, Users, BookOpen, GraduationCap, UserPlus, Plus, X, Database } from "lucide-react"
+import { LogOut, Users, BookOpen, GraduationCap, UserPlus, Plus, X, Pencil, Trash2, Search } from "lucide-react"
 import type { User, Subject, Course, SubjectCourse, TeacherSubject } from "@/lib/types"
 import {
   getUsers,
   addUser,
+  updateUser,
+  deleteUser,
   getSubjects,
   addSubject,
+  updateSubject,
+  deleteSubject,
   getCourses,
   addCourse,
+  updateCourse,
+  deleteCourse,
   getSubjectCourses,
   addSubjectCourse,
+  deleteSubjectCourse,
   getTeacherSubjects,
   addTeacherSubject,
+  updateTeacherSubject,
+  deleteTeacherSubject,
 } from "@/lib/storage-index"
-import { testSupabaseConnection } from "@/lib/test-supabase"
-import { isSupabaseConfigured } from "@/lib/supabase"
+import { toast } from "sonner"
 
 interface AdminDashboardProps {
   user: User
@@ -39,127 +47,595 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [courses, setCourses] = useState<Course[]>([])
   const [subjectCourses, setSubjectCourses] = useState<SubjectCourse[]>([])
   const [teacherSubjects, setTeacherSubjects] = useState<TeacherSubject[]>([])
-  const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; message: string; error?: string } | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Estados para controlar los diálogos
+  const [isUserDialogOpen, setIsUserDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isSubjectDialogOpen, setIsSubjectDialogOpen] = useState(false)
+  const [isEditSubjectDialogOpen, setIsEditSubjectDialogOpen] = useState(false)
+  const [isDeleteSubjectDialogOpen, setIsDeleteSubjectDialogOpen] = useState(false)
+  const [isCourseDialogOpen, setIsCourseDialogOpen] = useState(false)
+  const [isEditCourseDialogOpen, setIsEditCourseDialogOpen] = useState(false)
+  const [isDeleteCourseDialogOpen, setIsDeleteCourseDialogOpen] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [deletingUser, setDeletingUser] = useState<{ id: string; name: string } | null>(null)
+  const [editingSubject, setEditingSubject] = useState<Subject | null>(null)
+  const [deletingSubject, setDeletingSubject] = useState<{ id: string; name: string } | null>(null)
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null)
+  const [deletingCourse, setDeletingCourse] = useState<{ id: string; name: string } | null>(null)
 
   // Estados para formularios
   const [newUser, setNewUser] = useState({ dni: "", name: "", password: "", role: "profesor" as User["role"] })
+  const [editUser, setEditUser] = useState({ dni: "", name: "", password: "", role: "profesor" as User["role"] })
   const [newSubject, setNewSubject] = useState({ name: "" })
+  const [editSubject, setEditSubject] = useState({ name: "" })
   const [newCourse, setNewCourse] = useState({ name: "" })
-  const [newSubjectCourse, setNewSubjectCourse] = useState({ subjectId: "", courseId: "" })
+  const [editCourse, setEditCourse] = useState({ name: "" })
+  const [searchSubject, setSearchSubject] = useState("")
+  const [courseSubjects, setCourseSubjects] = useState<string[]>([])
+  const [originalCourseSubjects, setOriginalCourseSubjects] = useState<string[]>([])
   const [newTeacherSubject, setNewTeacherSubject] = useState({ teacherId: "", subjectId: "", courseId: "" })
+  
+  // Estados para búsqueda en asignación de profesor
+  const [searchTeacher, setSearchTeacher] = useState("")
+  const [searchSubjectForTeacher, setSearchSubjectForTeacher] = useState("")
+  const [searchCourseForTeacher, setSearchCourseForTeacher] = useState("")
+  const [showTeacherDropdown, setShowTeacherDropdown] = useState(false)
+  const [showSubjectForTeacherDropdown, setShowSubjectForTeacherDropdown] = useState(false)
+  const [showCourseForTeacherDropdown, setShowCourseForTeacherDropdown] = useState(false)
+  
+  // Estados para editar/eliminar asignación de profesor
+  const [isEditTeacherSubjectDialogOpen, setIsEditTeacherSubjectDialogOpen] = useState(false)
+  const [isDeleteTeacherSubjectDialogOpen, setIsDeleteTeacherSubjectDialogOpen] = useState(false)
+  const [editingTeacher, setEditingTeacher] = useState<{ id: string; name: string } | null>(null)
+  const [teacherAssignments, setTeacherAssignments] = useState<Array<{ subjectId: string; courseId: string }>>([])
+  const [originalTeacherAssignments, setOriginalTeacherAssignments] = useState<Array<{ id: string; subjectId: string; courseId: string }>>([])
+  const [deletingTeacherSubject, setDeletingTeacherSubject] = useState<{ id: string; name: string } | null>(null)
+  const [searchSubjectForEdit, setSearchSubjectForEdit] = useState("")
+  const [searchCourseForEdit, setSearchCourseForEdit] = useState("")
+  const [selectedSubjectId, setSelectedSubjectId] = useState("")
+  const [selectedCourseId, setSelectedCourseId] = useState("")
 
   useEffect(() => {
     loadData()
-    checkSupabaseConnection()
   }, [])
 
-  const checkSupabaseConnection = async () => {
-    const status = await testSupabaseConnection()
-    setSupabaseStatus(status)
-  }
-
   const loadData = async () => {
-    const [usersData, subjectsData, coursesData, subjectCoursesData, teacherSubjectsData] = await Promise.all([
-      getUsers(),
-      getSubjects(),
-      getCourses(),
-      getSubjectCourses(),
-      getTeacherSubjects(),
-    ])
-    setUsers(usersData)
-    setSubjects(subjectsData)
-    setCourses(coursesData)
-    setSubjectCourses(subjectCoursesData)
-    setTeacherSubjects(teacherSubjectsData)
+    setIsLoading(true)
+    try {
+      // Cargar usuarios primero (lo más importante)
+      const usersData = await getUsers()
+      setUsers(usersData)
+      
+      // Luego cargar el resto en paralelo
+      const [subjectsData, coursesData, subjectCoursesData, teacherSubjectsData] = await Promise.all([
+        getSubjects(),
+        getCourses(),
+        getSubjectCourses(),
+        getTeacherSubjects(),
+      ])
+      
+      setSubjects(subjectsData)
+      setCourses(coursesData)
+      setSubjectCourses(subjectCoursesData)
+      setTeacherSubjects(teacherSubjectsData)
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleAddUser = async () => {
+    // Validar campos requeridos
     if (!newUser.dni || !newUser.name || !newUser.password) {
-      alert("Por favor complete todos los campos")
+      toast.error("Campos incompletos", {
+        description: "Por favor complete todos los campos requeridos (DNI, Nombre y Contraseña).",
+      })
       return
     }
 
-    const existingUsers = await getUsers()
-    if (existingUsers.find((u) => u.dni === newUser.dni)) {
-      alert("Ya existe un usuario con ese DNI")
+    // Validar formato de DNI (solo números)
+    if (!/^\d+$/.test(newUser.dni.trim())) {
+      toast.error("DNI inválido", {
+        description: "El DNI debe contener solo números.",
+      })
+      return
+    }
+
+    // Validar longitud mínima de contraseña
+    if (newUser.password.length < 4) {
+      toast.error("Contraseña muy corta", {
+        description: "La contraseña debe tener al menos 4 caracteres.",
+      })
       return
     }
 
     try {
-      await addUser(newUser)
+      // Guardar el nombre antes de limpiar el formulario
+      const userName = newUser.name.trim()
+      const userDni = newUser.dni.trim()
+
+      // Verificar si el usuario ya existe (usando la lista actual en memoria para ser más rápido)
+      if (users.find((u) => u.dni === userDni)) {
+        toast.error("Usuario duplicado", {
+          description: `Ya existe un usuario con el DNI ${userDni}. Por favor, use un DNI diferente.`,
+        })
+        return
+      }
+
+      // Crear el usuario
+      const createdUser = await addUser({
+        dni: userDni,
+        name: userName,
+        password: newUser.password,
+        role: newUser.role,
+      })
+
+      // Actualizar la lista de usuarios inmediatamente sin recargar todos los datos
+      setUsers([...users, createdUser])
+
+      // Limpiar formulario
       setNewUser({ dni: "", name: "", password: "", role: "profesor" })
-      await loadData()
-      alert("Usuario creado exitosamente")
-    } catch (error) {
-      alert("Error al crear usuario")
-      console.error(error)
+
+      // Cerrar el diálogo
+      setIsUserDialogOpen(false)
+
+      // Mostrar mensaje de éxito inmediatamente
+      toast.success("Usuario creado exitosamente", {
+        description: `El usuario ${userName} ha sido creado correctamente.`,
+      })
+    } catch (error: any) {
+      console.error("Error al crear usuario:", error)
+      
+      // Mensajes de error específicos según el tipo de error
+      if (error?.message?.includes("duplicate") || error?.code === "23505") {
+        toast.error("Error al crear usuario", {
+          description: "Ya existe un usuario con ese DNI en la base de datos.",
+        })
+      } else if (error?.message?.includes("permission") || error?.code === "42501") {
+        toast.error("Error de permisos", {
+          description: "No tienes permisos para crear usuarios. Verifica la configuración de Supabase.",
+        })
+      } else if (error?.message?.includes("network") || error?.message?.includes("fetch")) {
+        toast.error("Error de conexión", {
+          description: "No se pudo conectar con la base de datos. Verifica tu conexión a internet.",
+        })
+      } else {
+        toast.error("Error al crear usuario", {
+          description: error?.message || "Ocurrió un error inesperado al intentar crear el usuario.",
+        })
+      }
+    }
+  }
+
+  const handleEditUser = async () => {
+    if (!editingUser) return
+
+    // Validar campos requeridos
+    if (!editUser.dni || !editUser.name || !editUser.password) {
+      toast.error("Campos incompletos", {
+        description: "Por favor complete todos los campos requeridos (DNI, Nombre y Contraseña).",
+      })
+      return
+    }
+
+    // Validar formato de DNI (solo números)
+    if (!/^\d+$/.test(editUser.dni.trim())) {
+      toast.error("DNI inválido", {
+        description: "El DNI debe contener solo números.",
+      })
+      return
+    }
+
+    // Validar longitud mínima de contraseña
+    if (editUser.password.length < 4) {
+      toast.error("Contraseña muy corta", {
+        description: "La contraseña debe tener al menos 4 caracteres.",
+      })
+      return
+    }
+
+    try {
+      const userName = editUser.name.trim()
+      const userDni = editUser.dni.trim()
+
+      // Verificar si el DNI ya existe en otro usuario
+      const existingUser = users.find((u) => u.dni === userDni && u.id !== editingUser.id)
+      if (existingUser) {
+        toast.error("DNI duplicado", {
+          description: `Ya existe otro usuario con el DNI ${userDni}.`,
+        })
+        return
+      }
+
+      // Actualizar el usuario
+      await updateUser(editingUser.id, {
+        dni: userDni,
+        name: userName,
+        password: editUser.password,
+        role: editUser.role,
+      })
+
+      // Actualizar la lista de usuarios en memoria
+      setUsers(users.map((u) => 
+        u.id === editingUser.id 
+          ? { ...u, dni: userDni, name: userName, password: editUser.password, role: editUser.role }
+          : u
+      ))
+
+      // Cerrar el diálogo y limpiar el estado
+      setIsEditDialogOpen(false)
+      setEditingUser(null)
+      setEditUser({ dni: "", name: "", password: "", role: "profesor" })
+
+      toast.success("Usuario actualizado", {
+        description: `El usuario ${userName} ha sido actualizado correctamente.`,
+      })
+    } catch (error: any) {
+      console.error("Error al actualizar usuario:", error)
+      toast.error("Error al actualizar usuario", {
+        description: error?.message || "Ocurrió un error inesperado al intentar actualizar el usuario.",
+      })
+    }
+  }
+
+  const openDeleteDialog = (userId: string, userName: string) => {
+    setDeletingUser({ id: userId, name: userName })
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleDeleteUser = async () => {
+    if (!deletingUser) return
+
+    try {
+      await deleteUser(deletingUser.id)
+
+      // Actualizar la lista de usuarios en memoria
+      setUsers(users.filter((u) => u.id !== deletingUser.id))
+
+      // Cerrar el diálogo
+      setIsDeleteDialogOpen(false)
+      setDeletingUser(null)
+
+      toast.success("Usuario eliminado", {
+        description: `El usuario ${deletingUser.name} ha sido eliminado correctamente.`,
+      })
+    } catch (error: any) {
+      console.error("Error al eliminar usuario:", error)
+      toast.error("Error al eliminar usuario", {
+        description: error?.message || "Ocurrió un error inesperado al intentar eliminar el usuario.",
+      })
+    }
+  }
+
+  const openEditDialog = (user: User) => {
+    setEditingUser(user)
+    setEditUser({
+      dni: user.dni,
+      name: user.name,
+      password: user.password,
+      role: user.role,
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const openEditSubjectDialog = (subject: Subject) => {
+    setEditingSubject(subject)
+    setEditSubject({ name: subject.name })
+    setIsEditSubjectDialogOpen(true)
+  }
+
+  const openDeleteSubjectDialog = (subjectId: string, subjectName: string) => {
+    setDeletingSubject({ id: subjectId, name: subjectName })
+    setIsDeleteSubjectDialogOpen(true)
+  }
+
+  const handleEditSubject = async () => {
+    if (!editingSubject) return
+
+    if (!editSubject.name.trim()) {
+      toast.error("Campo incompleto", {
+        description: "Por favor ingrese el nombre de la materia.",
+      })
+      return
+    }
+
+    try {
+      const subjectName = editSubject.name.trim()
+
+      // Verificar si ya existe otra materia con ese nombre
+      const existingSubject = subjects.find(
+        (s) => s.name.toLowerCase() === subjectName.toLowerCase() && s.id !== editingSubject.id
+      )
+      if (existingSubject) {
+        toast.error("Nombre duplicado", {
+          description: `Ya existe otra materia con el nombre "${subjectName}".`,
+        })
+        return
+      }
+
+      await updateSubject(editingSubject.id, { name: subjectName })
+
+      // Actualizar la lista en memoria
+      setSubjects(subjects.map((s) => (s.id === editingSubject.id ? { ...s, name: subjectName } : s)))
+
+      // Cerrar el diálogo y limpiar el estado
+      setIsEditSubjectDialogOpen(false)
+      setEditingSubject(null)
+      setEditSubject({ name: "" })
+
+      toast.success("Materia actualizada", {
+        description: `La materia ${subjectName} ha sido actualizada correctamente.`,
+      })
+    } catch (error: any) {
+      console.error("Error al actualizar materia:", error)
+      toast.error("Error al actualizar materia", {
+        description: error?.message || "Ocurrió un error inesperado al intentar actualizar la materia.",
+      })
+    }
+  }
+
+  const handleDeleteSubject = async () => {
+    if (!deletingSubject) return
+
+    try {
+      await deleteSubject(deletingSubject.id)
+
+      // Actualizar la lista en memoria
+      setSubjects(subjects.filter((s) => s.id !== deletingSubject.id))
+
+      // Cerrar el diálogo
+      setIsDeleteSubjectDialogOpen(false)
+      setDeletingSubject(null)
+
+      toast.success("Materia eliminada", {
+        description: `La materia ${deletingSubject.name} ha sido eliminada correctamente.`,
+      })
+    } catch (error: any) {
+      console.error("Error al eliminar materia:", error)
+      toast.error("Error al eliminar materia", {
+        description: error?.message || "Ocurrió un error inesperado al intentar eliminar la materia.",
+      })
     }
   }
 
   const handleAddSubject = async () => {
-    if (!newSubject.name) {
-      alert("Por favor ingrese el nombre de la materia")
+    if (!newSubject.name.trim()) {
+      toast.error("Campo incompleto", {
+        description: "Por favor ingrese el nombre de la materia.",
+      })
       return
     }
 
     try {
-      await addSubject(newSubject)
+      const subjectName = newSubject.name.trim()
+      
+      // Verificar si la materia ya existe
+      if (subjects.find((s) => s.name.toLowerCase() === subjectName.toLowerCase())) {
+        toast.error("Materia duplicada", {
+          description: `Ya existe una materia con el nombre "${subjectName}".`,
+        })
+        return
+      }
+
+      const createdSubject = await addSubject({ name: subjectName })
+      
+      // Actualizar la lista en memoria
+      setSubjects([...subjects, createdSubject])
+      
+      // Limpiar formulario
       setNewSubject({ name: "" })
-      await loadData()
-      alert("Materia creada exitosamente")
-    } catch (error) {
-      alert("Error al crear materia")
-      console.error(error)
+      
+      // Cerrar el diálogo
+      setIsSubjectDialogOpen(false)
+      
+      toast.success("Materia creada exitosamente", {
+        description: `La materia ${subjectName} ha sido creada correctamente.`,
+      })
+    } catch (error: any) {
+      console.error("Error al crear materia:", error)
+      toast.error("Error al crear materia", {
+        description: error?.message || "Ocurrió un error inesperado al intentar crear la materia.",
+      })
+    }
+  }
+
+  const openEditCourseDialog = (course: Course) => {
+    setEditingCourse(course)
+    setEditCourse({ name: course.name })
+    setSearchSubject("")
+    
+    // Obtener las materias asignadas a este curso
+    const assignedSubjects = subjectCourses
+      .filter((sc) => sc.courseId === course.id)
+      .map((sc) => sc.subjectId)
+    setCourseSubjects(assignedSubjects)
+    setOriginalCourseSubjects(assignedSubjects) // Guardar el estado original
+    
+    setIsEditCourseDialogOpen(true)
+  }
+
+  const openDeleteCourseDialog = (courseId: string, courseName: string) => {
+    setDeletingCourse({ id: courseId, name: courseName })
+    setIsDeleteCourseDialogOpen(true)
+  }
+
+  const handleAddSubjectToCourse = (subjectId: string) => {
+    if (!editingCourse) return
+
+    // Verificar si la materia ya está asignada
+    if (courseSubjects.includes(subjectId)) {
+      toast.error("Materia ya asignada", {
+        description: "Esta materia ya está asignada a este curso.",
+      })
+      return
+    }
+
+    // Solo actualizar el estado local, no guardar en la base de datos aún
+    setCourseSubjects([...courseSubjects, subjectId])
+  }
+
+  const handleRemoveSubjectFromCourse = (subjectId: string) => {
+    if (!editingCourse) return
+
+    // Solo actualizar el estado local, no guardar en la base de datos aún
+    setCourseSubjects(courseSubjects.filter((id) => id !== subjectId))
+  }
+
+  const handleEditCourse = async () => {
+    if (!editingCourse) return
+
+    if (!editCourse.name.trim()) {
+      toast.error("Campo incompleto", {
+        description: "Por favor ingrese el nombre del curso.",
+      })
+      return
+    }
+
+    try {
+      const courseName = editCourse.name.trim()
+
+      // Verificar si ya existe otro curso con ese nombre
+      const existingCourse = courses.find(
+        (c) => c.name.toLowerCase() === courseName.toLowerCase() && c.id !== editingCourse.id
+      )
+      if (existingCourse) {
+        toast.error("Nombre duplicado", {
+          description: `Ya existe otro curso con el nombre "${courseName}".`,
+        })
+        return
+      }
+
+      // Actualizar el nombre del curso
+      await updateCourse(editingCourse.id, { name: courseName })
+
+      // Actualizar la lista de cursos en memoria
+      setCourses(courses.map((c) => (c.id === editingCourse.id ? { ...c, name: courseName } : c)))
+
+      // Sincronizar las materias asignadas
+      // 1. Encontrar materias que se eliminaron
+      const removedSubjects = originalCourseSubjects.filter((id) => !courseSubjects.includes(id))
+      
+      // 2. Encontrar materias que se agregaron
+      const addedSubjects = courseSubjects.filter((id) => !originalCourseSubjects.includes(id))
+
+      // 3. Encontrar las asignaciones que se deben eliminar
+      const assignmentsToRemove = subjectCourses.filter(
+        (sc) => removedSubjects.includes(sc.subjectId) && sc.courseId === editingCourse.id
+      )
+
+      // 4. Eliminar las asignaciones de la base de datos
+      for (const assignment of assignmentsToRemove) {
+        await deleteSubjectCourse(assignment.id)
+      }
+
+      // 5. Agregar las nuevas asignaciones
+      const newAssignments: SubjectCourse[] = []
+      for (const subjectId of addedSubjects) {
+        const createdAssignment = await addSubjectCourse({ subjectId, courseId: editingCourse.id })
+        newAssignments.push(createdAssignment)
+      }
+
+      // 6. Actualizar la lista global de una sola vez
+      setSubjectCourses((prev) => {
+        // Eliminar las asignaciones que se quitaron
+        const filtered = prev.filter((sc) => !assignmentsToRemove.some((a) => a.id === sc.id))
+        // Agregar las nuevas asignaciones
+        return [...filtered, ...newAssignments]
+      })
+
+      // Cerrar el diálogo y limpiar el estado
+      setIsEditCourseDialogOpen(false)
+      setEditingCourse(null)
+      setEditCourse({ name: "" })
+      setCourseSubjects([])
+      setOriginalCourseSubjects([])
+      setSearchSubject("")
+
+      toast.success("Curso actualizado", {
+        description: `El curso ${courseName} y sus materias han sido actualizados correctamente.`,
+      })
+    } catch (error: any) {
+      console.error("Error al actualizar curso:", error)
+      toast.error("Error al actualizar curso", {
+        description: error?.message || "Ocurrió un error inesperado al intentar actualizar el curso.",
+      })
+    }
+  }
+
+  const handleDeleteCourse = async () => {
+    if (!deletingCourse) return
+
+    try {
+      await deleteCourse(deletingCourse.id)
+
+      // Actualizar la lista en memoria
+      setCourses(courses.filter((c) => c.id !== deletingCourse.id))
+
+      // Cerrar el diálogo
+      setIsDeleteCourseDialogOpen(false)
+      setDeletingCourse(null)
+
+      toast.success("Curso eliminado", {
+        description: `El curso ${deletingCourse.name} ha sido eliminado correctamente.`,
+      })
+    } catch (error: any) {
+      console.error("Error al eliminar curso:", error)
+      toast.error("Error al eliminar curso", {
+        description: error?.message || "Ocurrió un error inesperado al intentar eliminar el curso.",
+      })
     }
   }
 
   const handleAddCourse = async () => {
-    if (!newCourse.name) {
-      alert("Por favor ingrese el nombre del curso")
+    if (!newCourse.name.trim()) {
+      toast.error("Campo incompleto", {
+        description: "Por favor ingrese el nombre del curso.",
+      })
       return
     }
 
     try {
-      await addCourse(newCourse)
+      const courseName = newCourse.name.trim()
+      
+      // Verificar si el curso ya existe
+      if (courses.find((c) => c.name.toLowerCase() === courseName.toLowerCase())) {
+        toast.error("Curso duplicado", {
+          description: `Ya existe un curso con el nombre "${courseName}".`,
+        })
+        return
+      }
+
+      const createdCourse = await addCourse({ name: courseName })
+      
+      // Actualizar la lista en memoria
+      setCourses([...courses, createdCourse])
+      
+      // Limpiar formulario
       setNewCourse({ name: "" })
-      await loadData()
-      alert("Curso creado exitosamente")
-    } catch (error) {
-      alert("Error al crear curso")
-      console.error(error)
-    }
-  }
-
-  const handleAddSubjectCourse = async () => {
-    if (!newSubjectCourse.subjectId || !newSubjectCourse.courseId) {
-      alert("Por favor seleccione materia y curso")
-      return
-    }
-
-    const existing = await getSubjectCourses()
-    if (
-      existing.find(
-        (sc) => sc.subjectId === newSubjectCourse.subjectId && sc.courseId === newSubjectCourse.courseId,
-      )
-    ) {
-      alert("Esta asignación ya existe")
-      return
-    }
-
-    try {
-      await addSubjectCourse(newSubjectCourse)
-      setNewSubjectCourse({ subjectId: "", courseId: "" })
-      await loadData()
-      alert("Asignación creada exitosamente")
-    } catch (error) {
-      alert("Error al crear asignación")
-      console.error(error)
+      
+      // Cerrar el diálogo
+      setIsCourseDialogOpen(false)
+      
+      toast.success("Curso creado exitosamente", {
+        description: `El curso ${courseName} ha sido creado correctamente.`,
+      })
+    } catch (error: any) {
+      console.error("Error al crear curso:", error)
+      toast.error("Error al crear curso", {
+        description: error?.message || "Ocurrió un error inesperado al intentar crear el curso.",
+      })
     }
   }
 
   const handleAddTeacherSubject = async () => {
     if (!newTeacherSubject.teacherId || !newTeacherSubject.subjectId || !newTeacherSubject.courseId) {
-      alert("Por favor complete todos los campos")
+      toast.error("Campos incompletos", {
+        description: "Por favor seleccione profesor, materia y curso.",
+      })
       return
     }
 
@@ -172,18 +648,221 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           ts.courseId === newTeacherSubject.courseId,
       )
     ) {
-      alert("Esta asignación ya existe")
+      toast.error("Asignación duplicada", {
+        description: "Este profesor ya está asignado a esta materia y curso.",
+      })
       return
     }
 
     try {
       await addTeacherSubject(newTeacherSubject)
+      
+      // Actualizar la lista en memoria
+      const newAssignment = {
+        id: Date.now().toString(),
+        teacherId: newTeacherSubject.teacherId,
+        subjectId: newTeacherSubject.subjectId,
+        courseId: newTeacherSubject.courseId,
+        createdAt: new Date().toISOString(),
+      }
+      setTeacherSubjects([...teacherSubjects, newAssignment])
+      
+      // Limpiar los campos
       setNewTeacherSubject({ teacherId: "", subjectId: "", courseId: "" })
-      await loadData()
-      alert("Profesor asignado exitosamente")
-    } catch (error) {
-      alert("Error al asignar profesor")
-      console.error(error)
+      setSearchTeacher("")
+      setSearchSubjectForTeacher("")
+      setSearchCourseForTeacher("")
+      
+      const teacherName = users.find((u) => u.id === newTeacherSubject.teacherId)?.name || "Profesor"
+      const subjectName = subjects.find((s) => s.id === newTeacherSubject.subjectId)?.name || "Materia"
+      const courseName = courses.find((c) => c.id === newTeacherSubject.courseId)?.name || "Curso"
+      
+      toast.success("Asignación creada", {
+        description: `${teacherName} asignado a ${subjectName} en ${courseName}.`,
+      })
+    } catch (error: any) {
+      console.error("Error adding teacher subject:", error)
+      toast.error("Error al asignar", {
+        description: error?.message || "Ocurrió un error inesperado al intentar crear la asignación.",
+      })
+    }
+  }
+
+  const openEditTeacherSubjectDialog = (ts: TeacherSubject) => {
+    const teacher = users.find((u) => u.id === ts.teacherId)
+    if (!teacher) return
+
+    setEditingTeacher({ id: teacher.id, name: teacher.name })
+    
+    // Obtener todas las asignaciones del profesor
+    const allAssignments = teacherSubjects.filter((t) => t.teacherId === teacher.id)
+    
+    // Guardar las asignaciones originales
+    setOriginalTeacherAssignments(allAssignments.map((a) => ({
+      id: a.id,
+      subjectId: a.subjectId,
+      courseId: a.courseId
+    })))
+    
+    // Setear las asignaciones actuales (solo subjectId y courseId para edición)
+    setTeacherAssignments(allAssignments.map((a) => ({
+      subjectId: a.subjectId,
+      courseId: a.courseId
+    })))
+    
+    // Limpiar búsquedas
+    setSearchSubjectForEdit("")
+    setSearchCourseForEdit("")
+    setSelectedSubjectId("")
+    setSelectedCourseId("")
+    
+    setIsEditTeacherSubjectDialogOpen(true)
+  }
+
+  const handleAddAssignmentToTeacher = () => {
+    if (!selectedSubjectId || !selectedCourseId) {
+      toast.error("Campos incompletos", {
+        description: "Debes seleccionar una materia y un curso.",
+      })
+      return
+    }
+
+    // Verificar que no exista ya
+    const exists = teacherAssignments.some(
+      (a) => a.subjectId === selectedSubjectId && a.courseId === selectedCourseId
+    )
+    if (exists) {
+      toast.error("Asignación duplicada", {
+        description: "Esta combinación de materia y curso ya está asignada.",
+      })
+      return
+    }
+    
+    setTeacherAssignments([...teacherAssignments, { subjectId: selectedSubjectId, courseId: selectedCourseId }])
+    
+    // Limpiar los campos
+    setSearchSubjectForEdit("")
+    setSearchCourseForEdit("")
+    setSelectedSubjectId("")
+    setSelectedCourseId("")
+  }
+
+  const handleRemoveAssignmentFromTeacher = (subjectId: string, courseId: string) => {
+    setTeacherAssignments(
+      teacherAssignments.filter(
+        (a) => !(a.subjectId === subjectId && a.courseId === courseId)
+      )
+    )
+  }
+
+  const openDeleteTeacherSubjectDialog = (ts: TeacherSubject) => {
+    const teacherName = users.find((u) => u.id === ts.teacherId)?.name || "N/A"
+    const subjectName = subjects.find((s) => s.id === ts.subjectId)?.name || "N/A"
+    const courseName = courses.find((c) => c.id === ts.courseId)?.name || "N/A"
+    setDeletingTeacherSubject({
+      id: ts.id,
+      name: `${teacherName} - ${subjectName} - ${courseName}`,
+    })
+    setIsDeleteTeacherSubjectDialogOpen(true)
+  }
+
+  const handleEditTeacherSubject = async () => {
+    if (!editingTeacher) return
+
+    if (teacherAssignments.length === 0) {
+      toast.error("Sin asignaciones", {
+        description: "El profesor debe tener al menos una asignación.",
+      })
+      return
+    }
+
+    try {
+      // 1. Encontrar asignaciones que se eliminaron
+      const removedAssignments = originalTeacherAssignments.filter(
+        (original) =>
+          !teacherAssignments.some(
+            (current) =>
+              current.subjectId === original.subjectId &&
+              current.courseId === original.courseId
+          )
+      )
+
+      // 2. Encontrar asignaciones que se agregaron
+      const addedAssignments = teacherAssignments.filter(
+        (current) =>
+          !originalTeacherAssignments.some(
+            (original) =>
+              original.subjectId === current.subjectId &&
+              original.courseId === current.courseId
+          )
+      )
+
+      // 3. Eliminar asignaciones de la base de datos
+      for (const assignment of removedAssignments) {
+        await deleteTeacherSubject(assignment.id)
+      }
+
+      // 4. Agregar nuevas asignaciones
+      const newAssignments: TeacherSubject[] = []
+      for (const assignment of addedAssignments) {
+        const created = await addTeacherSubject({
+          teacherId: editingTeacher.id,
+          subjectId: assignment.subjectId,
+          courseId: assignment.courseId,
+        })
+        newAssignments.push(created)
+      }
+
+      // 5. Actualizar la lista global
+      setTeacherSubjects((prev) => {
+        // Eliminar las asignaciones quitadas
+        const filtered = prev.filter(
+          (ts) => !removedAssignments.some((a) => a.id === ts.id)
+        )
+        // Agregar las nuevas asignaciones
+        return [...filtered, ...newAssignments]
+      })
+
+      // Cerrar el diálogo y limpiar el estado
+      setIsEditTeacherSubjectDialogOpen(false)
+      setEditingTeacher(null)
+      setTeacherAssignments([])
+      setOriginalTeacherAssignments([])
+      setSearchSubjectForEdit("")
+      setSearchCourseForEdit("")
+
+      toast.success("Asignaciones actualizadas", {
+        description: `Las asignaciones de ${editingTeacher.name} han sido actualizadas correctamente.`,
+      })
+    } catch (error: any) {
+      console.error("Error al actualizar asignaciones:", error)
+      toast.error("Error al actualizar asignaciones", {
+        description: error?.message || "Ocurrió un error inesperado al intentar actualizar las asignaciones.",
+      })
+    }
+  }
+
+  const handleDeleteTeacherSubject = async () => {
+    if (!deletingTeacherSubject) return
+
+    try {
+      await deleteTeacherSubject(deletingTeacherSubject.id)
+
+      // Actualizar la lista en memoria
+      setTeacherSubjects(teacherSubjects.filter((ts) => ts.id !== deletingTeacherSubject.id))
+
+      // Cerrar el diálogo y limpiar el estado
+      setIsDeleteTeacherSubjectDialogOpen(false)
+      setDeletingTeacherSubject(null)
+
+      toast.success("Asignación eliminada", {
+        description: "La asignación ha sido eliminada correctamente.",
+      })
+    } catch (error: any) {
+      console.error("Error al eliminar asignación:", error)
+      toast.error("Error al eliminar asignación", {
+        description: error?.message || "Ocurrió un error inesperado al intentar eliminar la asignación.",
+      })
     }
   }
 
@@ -197,9 +876,14 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       <div className="border-b border-primary/20 bg-primary/5">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Panel de Administración</h1>
-              <p className="text-muted-foreground">Bienvenido, {user.name}</p>
+            <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-700 p-3 rounded-lg">
+                <BookOpen className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">Libro Tema</h1>
+                <p className="text-muted-foreground">Bienvenido, {user.name}</p>
+              </div>
             </div>
             <Button variant="outline" onClick={onLogout} className="border-primary/20">
               <LogOut className="h-4 w-4 mr-2" />
@@ -226,10 +910,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               Cursos
             </TabsTrigger>
             <TabsTrigger value="assignments">Asignaciones</TabsTrigger>
-            <TabsTrigger value="supabase">
-              <Database className="h-4 w-4 mr-2" />
-              Supabase
-            </TabsTrigger>
           </TabsList>
 
           {/* Tab Usuarios */}
@@ -241,7 +921,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <CardTitle>Gestión de Usuarios</CardTitle>
                     <CardDescription>Crear y administrar usuarios del sistema</CardDescription>
                   </div>
-                  <Dialog>
+                  <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
                     <DialogTrigger asChild>
                       <Button className="bg-primary hover:bg-primary/90">
                         <UserPlus className="h-4 w-4 mr-2" />
@@ -303,34 +983,153 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                 </div>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>DNI</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Rol</TableHead>
-                      <TableHead>Fecha de Creación</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users
-                      .filter((u) => u.role !== "admin")
-                      .map((u) => (
-                        <TableRow key={u.id}>
-                          <TableCell>{u.dni}</TableCell>
-                          <TableCell>{u.name}</TableCell>
-                          <TableCell>
-                            <Badge variant={u.role === "director" ? "default" : "secondary"}>
-                              {u.role === "director" ? "Director" : "Profesor"}
-                            </Badge>
+                {isLoading && users.length === 0 ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center space-y-2">
+                      <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+                      <p className="text-sm text-muted-foreground">Cargando usuarios...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>DNI</TableHead>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Rol</TableHead>
+                        <TableHead>Fecha de Creación</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {users.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                            No hay usuarios registrados
                           </TableCell>
-                          <TableCell>{new Date(u.createdAt).toLocaleDateString()}</TableCell>
                         </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        users
+                          .filter((u) => u.role !== "admin")
+                          .map((u) => (
+                            <TableRow key={u.id}>
+                              <TableCell>{u.dni}</TableCell>
+                              <TableCell>{u.name}</TableCell>
+                              <TableCell>
+                                <Badge variant={u.role === "director" ? "default" : "secondary"}>
+                                  {u.role === "director" ? "Director" : "Profesor"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{new Date(u.createdAt).toLocaleDateString()}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => openEditDialog(u)}
+                                    className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => openDeleteDialog(u.id, u.name)}
+                                    className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
+
+            {/* Diálogo de Edición de Usuario */}
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Editar Usuario</DialogTitle>
+                  <DialogDescription>Modifique los datos del usuario</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>DNI</Label>
+                    <Input
+                      value={editUser.dni}
+                      onChange={(e) => setEditUser({ ...editUser, dni: e.target.value })}
+                      placeholder="Ingrese el DNI"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nombre</Label>
+                    <Input
+                      value={editUser.name}
+                      onChange={(e) => setEditUser({ ...editUser, name: e.target.value })}
+                      placeholder="Ingrese el nombre"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Contraseña</Label>
+                    <Input
+                      type="password"
+                      value={editUser.password}
+                      onChange={(e) => setEditUser({ ...editUser, password: e.target.value })}
+                      placeholder="Ingrese la contraseña"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Rol</Label>
+                    <Select
+                      value={editUser.role}
+                      onValueChange={(value) => setEditUser({ ...editUser, role: value as User["role"] })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="director">Director</SelectItem>
+                        <SelectItem value="profesor">Profesor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button onClick={handleEditUser} className="w-full bg-blue-600 hover:bg-blue-700">
+                    Guardar Cambios
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Diálogo de Confirmación de Eliminación */}
+            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Eliminar Usuario</DialogTitle>
+                  <DialogDescription>
+                    ¿Está seguro de que desea eliminar al usuario "{deletingUser?.name}"?
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsDeleteDialogOpen(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleDeleteUser}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    Aceptar
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Tab Materias */}
@@ -342,7 +1141,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <CardTitle>Gestión de Materias</CardTitle>
                     <CardDescription>Crear y administrar materias</CardDescription>
                   </div>
-                  <Dialog>
+                  <Dialog open={isSubjectDialogOpen} onOpenChange={setIsSubjectDialogOpen}>
                     <DialogTrigger asChild>
                       <Button className="bg-primary hover:bg-primary/90">
                         <Plus className="h-4 w-4 mr-2" />
@@ -377,19 +1176,91 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <TableRow>
                       <TableHead>Nombre</TableHead>
                       <TableHead>Fecha de Creación</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {subjects.map((s) => (
-                      <TableRow key={s.id}>
-                        <TableCell>{s.name}</TableCell>
-                        <TableCell>{new Date(s.createdAt).toLocaleDateString()}</TableCell>
+                    {subjects.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                          No hay materias registradas
+                        </TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      subjects.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell>{s.name}</TableCell>
+                          <TableCell>{new Date(s.createdAt).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openEditSubjectDialog(s)}
+                                className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openDeleteSubjectDialog(s.id, s.name)}
+                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
             </Card>
+
+            {/* Diálogo de Edición de Materia */}
+            <Dialog open={isEditSubjectDialogOpen} onOpenChange={setIsEditSubjectDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Editar Materia</DialogTitle>
+                  <DialogDescription>Modifique el nombre de la materia</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Nombre de la Materia</Label>
+                    <Input
+                      value={editSubject.name}
+                      onChange={(e) => setEditSubject({ name: e.target.value })}
+                      placeholder="Ej: Matemática"
+                    />
+                  </div>
+                  <Button onClick={handleEditSubject} className="w-full bg-blue-600 hover:bg-blue-700">
+                    Guardar Cambios
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Diálogo de Confirmación de Eliminación de Materia */}
+            <Dialog open={isDeleteSubjectDialogOpen} onOpenChange={setIsDeleteSubjectDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Eliminar Materia</DialogTitle>
+                  <DialogDescription>
+                    ¿Está seguro de que desea eliminar la materia "{deletingSubject?.name}"?
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button variant="outline" onClick={() => setIsDeleteSubjectDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleDeleteSubject} className="bg-red-600 hover:bg-red-700">
+                    Aceptar
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Tab Cursos */}
@@ -401,7 +1272,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                     <CardTitle>Gestión de Cursos</CardTitle>
                     <CardDescription>Crear y administrar cursos</CardDescription>
                   </div>
-                  <Dialog>
+                  <Dialog open={isCourseDialogOpen} onOpenChange={setIsCourseDialogOpen}>
                     <DialogTrigger asChild>
                       <Button className="bg-primary hover:bg-primary/90">
                         <Plus className="h-4 w-4 mr-2" />
@@ -435,74 +1306,199 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nombre</TableHead>
+                      <TableHead>Materias Asignadas</TableHead>
                       <TableHead>Fecha de Creación</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {courses.map((c) => (
-                      <TableRow key={c.id}>
-                        <TableCell>{c.name}</TableCell>
-                        <TableCell>{new Date(c.createdAt).toLocaleDateString()}</TableCell>
+                    {courses.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                          No hay cursos registrados
+                        </TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      courses.map((c) => {
+                        // Obtener las materias asignadas a este curso
+                        const assignedSubjectIds = subjectCourses
+                          .filter((sc) => sc.courseId === c.id)
+                          .map((sc) => sc.subjectId)
+                        const assignedSubjectNames = subjects
+                          .filter((s) => assignedSubjectIds.includes(s.id))
+                          .map((s) => s.name)
+                        
+                        return (
+                          <TableRow key={c.id}>
+                            <TableCell>{c.name}</TableCell>
+                            <TableCell>
+                              {assignedSubjectNames.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {assignedSubjectNames.map((name, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="inline-flex items-center px-2 py-1 rounded-md bg-blue-50 text-blue-700 text-xs font-medium"
+                                    >
+                                      {name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-sm text-muted-foreground italic">Sin materias</span>
+                              )}
+                            </TableCell>
+                            <TableCell>{new Date(c.createdAt).toLocaleDateString()}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openEditCourseDialog(c)}
+                                  className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openDeleteCourseDialog(c.id, c.name)}
+                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
             </Card>
+
+            {/* Diálogo de Edición de Curso */}
+            <Dialog open={isEditCourseDialogOpen} onOpenChange={setIsEditCourseDialogOpen}>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Editar Curso</DialogTitle>
+                  <DialogDescription>Modifique el nombre del curso y gestione las materias asignadas</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6 py-4">
+                  {/* Nombre del Curso */}
+                  <div className="space-y-2">
+                    <Label>Nombre del Curso</Label>
+                    <Input
+                      value={editCourse.name}
+                      onChange={(e) => setEditCourse({ name: e.target.value })}
+                      placeholder="Ej: 3° A"
+                    />
+                  </div>
+
+                  {/* Materias Asignadas */}
+                  <div className="space-y-2">
+                    <Label>Materias Asignadas</Label>
+                    {courseSubjects.length === 0 ? (
+                      <div className="text-sm text-muted-foreground py-4 text-center border rounded-md">
+                        No hay materias asignadas a este curso
+                      </div>
+                    ) : (
+                      <div className="space-y-2 border rounded-md p-3">
+                        {courseSubjects.map((subjectId) => {
+                          const subject = subjects.find((s) => s.id === subjectId)
+                          return (
+                            <div
+                              key={subjectId}
+                              className="flex items-center justify-between p-2 bg-secondary/50 rounded-md"
+                            >
+                              <span className="text-sm font-medium">{subject?.name}</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveSubjectFromCourse(subjectId)}
+                                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Buscar y Agregar Materias */}
+                  <div className="space-y-2">
+                    <Label>Agregar Materia</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={searchSubject}
+                        onChange={(e) => setSearchSubject(e.target.value)}
+                        placeholder="Buscar materia..."
+                        className="pl-9"
+                      />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto border rounded-md">
+                      {subjects
+                        .filter((s) => {
+                          const matchesSearch = s.name.toLowerCase().includes(searchSubject.toLowerCase())
+                          const notAssigned = !courseSubjects.includes(s.id)
+                          return matchesSearch && notAssigned
+                        })
+                        .map((subject) => (
+                          <div
+                            key={subject.id}
+                            className="flex items-center justify-between p-3 hover:bg-secondary/50 cursor-pointer border-b last:border-b-0"
+                            onClick={() => handleAddSubjectToCourse(subject.id)}
+                          >
+                            <span className="text-sm">{subject.name}</span>
+                            <Plus className="h-4 w-4 text-green-600" />
+                          </div>
+                        ))}
+                      {subjects.filter((s) => {
+                        const matchesSearch = s.name.toLowerCase().includes(searchSubject.toLowerCase())
+                        const notAssigned = !courseSubjects.includes(s.id)
+                        return matchesSearch && notAssigned
+                      }).length === 0 && (
+                        <div className="text-sm text-muted-foreground py-4 text-center">
+                          {searchSubject ? "No se encontraron materias" : "Todas las materias están asignadas"}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button onClick={handleEditCourse} className="w-full bg-blue-600 hover:bg-blue-700">
+                    Guardar Cambios
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Diálogo de Confirmación de Eliminación de Curso */}
+            <Dialog open={isDeleteCourseDialogOpen} onOpenChange={setIsDeleteCourseDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Eliminar Curso</DialogTitle>
+                  <DialogDescription>
+                    ¿Está seguro de que desea eliminar el curso "{deletingCourse?.name}"?
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button variant="outline" onClick={() => setIsDeleteCourseDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleDeleteCourse} className="bg-red-600 hover:bg-red-700">
+                    Aceptar
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Tab Asignaciones */}
           <TabsContent value="assignments" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              {/* Asignar Materia a Curso */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Asignar Materia a Curso</CardTitle>
-                  <CardDescription>Asigne materias a los cursos</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Materia</Label>
-                    <Select
-                      value={newSubjectCourse.subjectId}
-                      onValueChange={(value) => setNewSubjectCourse({ ...newSubjectCourse, subjectId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione una materia" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subjects.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Curso</Label>
-                    <Select
-                      value={newSubjectCourse.courseId}
-                      onValueChange={(value) => setNewSubjectCourse({ ...newSubjectCourse, courseId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione un curso" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {courses.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button onClick={handleAddSubjectCourse} className="w-full bg-primary hover:bg-primary/90">
-                    Asignar
-                  </Button>
-                </CardContent>
-              </Card>
-
+            <div className="max-w-2xl mx-auto">
               {/* Asignar Profesor a Materia */}
               <Card>
                 <CardHeader>
@@ -510,63 +1506,193 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                   <CardDescription>Asigne profesores a materias y cursos</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Búsqueda de Profesor */}
                   <div className="space-y-2">
                     <Label>Profesor</Label>
-                    <Select
-                      value={newTeacherSubject.teacherId}
-                      onValueChange={(value) => setNewTeacherSubject({ ...newTeacherSubject, teacherId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione un profesor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {users
-                          .filter((u) => u.role === "profesor")
-                          .map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              {u.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={searchTeacher}
+                        onChange={(e) => {
+                          setSearchTeacher(e.target.value)
+                          setShowTeacherDropdown(true)
+                        }}
+                        onFocus={() => setShowTeacherDropdown(true)}
+                        placeholder="Buscar profesor..."
+                        className="pl-9"
+                      />
+                    </div>
+                    {showTeacherDropdown && searchTeacher && (
+                      <div className="relative">
+                        <div className="absolute z-50 w-full max-h-48 overflow-y-auto border rounded-md bg-white shadow-lg">
+                          {users
+                            .filter((u) => u.role === "profesor" && u.name.toLowerCase().includes(searchTeacher.toLowerCase()))
+                            .map((teacher) => (
+                              <div
+                                key={teacher.id}
+                                className="flex items-center justify-between p-3 hover:bg-secondary/50 cursor-pointer border-b last:border-b-0"
+                                onClick={() => {
+                                  setNewTeacherSubject({ ...newTeacherSubject, teacherId: teacher.id })
+                                  setSearchTeacher(teacher.name)
+                                  setShowTeacherDropdown(false)
+                                }}
+                              >
+                                <span className="text-sm">{teacher.name}</span>
+                              </div>
+                            ))}
+                          {users.filter((u) => u.role === "profesor" && u.name.toLowerCase().includes(searchTeacher.toLowerCase())).length === 0 && (
+                            <div className="text-sm text-muted-foreground py-4 text-center">
+                              No se encontraron profesores
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {newTeacherSubject.teacherId && !showTeacherDropdown && (
+                      <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                        <span className="text-sm font-medium text-blue-700">
+                          {users.find((u) => u.id === newTeacherSubject.teacherId)?.name}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setNewTeacherSubject({ ...newTeacherSubject, teacherId: "" })
+                            setSearchTeacher("")
+                          }}
+                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ml-auto"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Búsqueda de Materia */}
                   <div className="space-y-2">
                     <Label>Materia</Label>
-                    <Select
-                      value={newTeacherSubject.subjectId}
-                      onValueChange={(value) => setNewTeacherSubject({ ...newTeacherSubject, subjectId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione una materia" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subjects.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={searchSubjectForTeacher}
+                        onChange={(e) => {
+                          setSearchSubjectForTeacher(e.target.value)
+                          setShowSubjectForTeacherDropdown(true)
+                        }}
+                        onFocus={() => setShowSubjectForTeacherDropdown(true)}
+                        placeholder="Buscar materia..."
+                        className="pl-9"
+                      />
+                    </div>
+                    {showSubjectForTeacherDropdown && searchSubjectForTeacher && (
+                      <div className="relative">
+                        <div className="absolute z-50 w-full max-h-48 overflow-y-auto border rounded-md bg-white shadow-lg">
+                          {subjects
+                            .filter((s) => s.name.toLowerCase().includes(searchSubjectForTeacher.toLowerCase()))
+                            .map((subject) => (
+                              <div
+                                key={subject.id}
+                                className="flex items-center justify-between p-3 hover:bg-secondary/50 cursor-pointer border-b last:border-b-0"
+                                onClick={() => {
+                                  setNewTeacherSubject({ ...newTeacherSubject, subjectId: subject.id })
+                                  setSearchSubjectForTeacher(subject.name)
+                                  setShowSubjectForTeacherDropdown(false)
+                                }}
+                              >
+                                <span className="text-sm">{subject.name}</span>
+                              </div>
+                            ))}
+                          {subjects.filter((s) => s.name.toLowerCase().includes(searchSubjectForTeacher.toLowerCase())).length === 0 && (
+                            <div className="text-sm text-muted-foreground py-4 text-center">
+                              No se encontraron materias
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {newTeacherSubject.subjectId && !showSubjectForTeacherDropdown && (
+                      <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                        <span className="text-sm font-medium text-blue-700">
+                          {subjects.find((s) => s.id === newTeacherSubject.subjectId)?.name}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setNewTeacherSubject({ ...newTeacherSubject, subjectId: "" })
+                            setSearchSubjectForTeacher("")
+                          }}
+                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ml-auto"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Búsqueda de Curso */}
                   <div className="space-y-2">
                     <Label>Curso</Label>
-                    <Select
-                      value={newTeacherSubject.courseId}
-                      onValueChange={(value) => setNewTeacherSubject({ ...newTeacherSubject, courseId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione un curso" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {courses.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={searchCourseForTeacher}
+                        onChange={(e) => {
+                          setSearchCourseForTeacher(e.target.value)
+                          setShowCourseForTeacherDropdown(true)
+                        }}
+                        onFocus={() => setShowCourseForTeacherDropdown(true)}
+                        placeholder="Buscar curso..."
+                        className="pl-9"
+                      />
+                    </div>
+                    {showCourseForTeacherDropdown && searchCourseForTeacher && (
+                      <div className="relative">
+                        <div className="absolute z-50 w-full max-h-48 overflow-y-auto border rounded-md bg-white shadow-lg">
+                          {courses
+                            .filter((c) => c.name.toLowerCase().includes(searchCourseForTeacher.toLowerCase()))
+                            .map((course) => (
+                              <div
+                                key={course.id}
+                                className="flex items-center justify-between p-3 hover:bg-secondary/50 cursor-pointer border-b last:border-b-0"
+                                onClick={() => {
+                                  setNewTeacherSubject({ ...newTeacherSubject, courseId: course.id })
+                                  setSearchCourseForTeacher(course.name)
+                                  setShowCourseForTeacherDropdown(false)
+                                }}
+                              >
+                                <span className="text-sm">{course.name}</span>
+                              </div>
+                            ))}
+                          {courses.filter((c) => c.name.toLowerCase().includes(searchCourseForTeacher.toLowerCase())).length === 0 && (
+                            <div className="text-sm text-muted-foreground py-4 text-center">
+                              No se encontraron cursos
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {newTeacherSubject.courseId && !showCourseForTeacherDropdown && (
+                      <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-md">
+                        <span className="text-sm font-medium text-blue-700">
+                          {courses.find((c) => c.id === newTeacherSubject.courseId)?.name}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setNewTeacherSubject({ ...newTeacherSubject, courseId: "" })
+                            setSearchCourseForTeacher("")
+                          }}
+                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ml-auto"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <Button onClick={handleAddTeacherSubject} className="w-full bg-primary hover:bg-primary/90">
+
+                  <Button onClick={handleAddTeacherSubject} className="w-full bg-green-600 hover:bg-green-700">
                     Asignar
                   </Button>
                 </CardContent>
@@ -584,131 +1710,255 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Profesor</TableHead>
-                      <TableHead>Materia</TableHead>
-                      <TableHead>Curso</TableHead>
+                      <TableHead>Asignaciones</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {teacherSubjects.map((ts) => (
-                      <TableRow key={ts.id}>
-                        <TableCell>{getUserName(ts.teacherId)}</TableCell>
-                        <TableCell>{getSubjectName(ts.subjectId)}</TableCell>
-                        <TableCell>{getCourseName(ts.courseId)}</TableCell>
+                    {teacherSubjects.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                          No hay asignaciones registradas
+                        </TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      (() => {
+                        // Agrupar asignaciones por profesor
+                        const grouped = teacherSubjects.reduce((acc, ts) => {
+                          if (!acc[ts.teacherId]) {
+                            acc[ts.teacherId] = []
+                          }
+                          acc[ts.teacherId].push(ts)
+                          return acc
+                        }, {} as Record<string, TeacherSubject[]>)
+                        
+                        return Object.entries(grouped).map(([teacherId, assignments]) => (
+                          <TableRow key={teacherId}>
+                            <TableCell className="font-medium">{getUserName(teacherId)}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-2">
+                                {assignments.map((ts) => (
+                                  <Badge key={ts.id} variant="secondary" className="text-xs">
+                                    {getSubjectName(ts.subjectId)} - {getCourseName(ts.courseId)}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openEditTeacherSubjectDialog(assignments[0])}
+                                  className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  title="Gestionar asignaciones"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openDeleteTeacherSubjectDialog(assignments[0])}
+                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Eliminar asignación"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      })()
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          {/* Tab Supabase */}
-          <TabsContent value="supabase" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Database className="h-5 w-5" />
-                  Estado de Conexión con Supabase
-                </CardTitle>
-                <CardDescription>Verifica la conexión y configuración de Supabase</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Estado de Configuración:</Label>
-                  <div className="flex items-center gap-2">
-                    {isSupabaseConfigured ? (
-                      <Badge className="bg-green-500">Configurado</Badge>
+            {/* Diálogo de Edición de Asignaciones del Profesor */}
+            <Dialog open={isEditTeacherSubjectDialogOpen} onOpenChange={setIsEditTeacherSubjectDialogOpen}>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Gestionar Asignaciones del Profesor</DialogTitle>
+                  <DialogDescription>
+                    Profesor: <span className="font-semibold text-foreground">{editingTeacher?.name}</span>
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6 py-4">
+                  {/* Asignaciones Actuales */}
+                  <div className="space-y-3">
+                    <Label className="text-base font-semibold">Asignaciones Actuales</Label>
+                    {teacherAssignments.length === 0 ? (
+                      <div className="text-sm text-muted-foreground py-4 text-center border rounded-md">
+                        No hay asignaciones. Agrega al menos una materia y curso.
+                      </div>
                     ) : (
-                      <Badge variant="destructive">No Configurado</Badge>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {teacherAssignments.map((assignment, index) => (
+                          <div
+                            key={`${assignment.subjectId}-${assignment.courseId}-${index}`}
+                            className="flex items-center justify-between p-3 bg-blue-50 rounded-md border border-blue-200"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div>
+                                <span className="text-sm font-medium text-blue-900">
+                                  {subjects.find((s) => s.id === assignment.subjectId)?.name || "N/A"}
+                                </span>
+                                <span className="text-sm text-blue-700 mx-2">-</span>
+                                <span className="text-sm text-blue-700">
+                                  {courses.find((c) => c.id === assignment.courseId)?.name || "N/A"}
+                                </span>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleRemoveAssignmentFromTeacher(assignment.subjectId, assignment.courseId)
+                              }
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                </div>
 
-                {!isSupabaseConfigured && (
-                  <Alert>
-                    <AlertDescription>
-                      <p className="font-semibold mb-2">Supabase no está configurado</p>
-                      <p className="text-sm">
-                        Para usar Supabase, crea un archivo <code className="bg-muted px-1 rounded">.env.local</code> en la raíz del proyecto con:
-                      </p>
-                      <pre className="bg-muted p-2 rounded mt-2 text-xs overflow-x-auto">
-                        {`NEXT_PUBLIC_SUPABASE_URL=tu_url_aqui
-NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_clave_aqui`}
-                      </pre>
-                      <p className="text-sm mt-2">
-                        Obtén estas credenciales desde:{" "}
-                        <a
-                          href="https://app.supabase.com/project/_/settings/api"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary underline"
-                        >
-                          Supabase Dashboard
-                        </a>
-                      </p>
-                    </AlertDescription>
-                  </Alert>
-                )}
+                  <div className="border-t pt-4" />
 
-                {isSupabaseConfigured && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Prueba de Conexión:</Label>
-                      <Button onClick={checkSupabaseConnection} variant="outline" className="w-full">
-                        <Database className="h-4 w-4 mr-2" />
-                        Probar Conexión
-                      </Button>
-                    </div>
-
-                    {supabaseStatus && (
+                  {/* Agregar Nueva Asignación */}
+                  <div className="space-y-3">
+                    <Label className="text-base font-semibold">Agregar Nueva Asignación</Label>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Búsqueda de Materia */}
                       <div className="space-y-2">
-                        <Label>Resultado:</Label>
-                        <Alert variant={supabaseStatus.connected ? "default" : "destructive"}>
-                          <AlertDescription>
-                            <div className="flex items-center gap-2 mb-2">
-                              {supabaseStatus.connected ? (
-                                <Badge className="bg-green-500">✓ Conectado</Badge>
-                              ) : (
-                                <Badge variant="destructive">✗ Error</Badge>
+                        <Label>Materia</Label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            value={searchSubjectForEdit}
+                            onChange={(e) => {
+                              setSearchSubjectForEdit(e.target.value)
+                              if (!e.target.value) setSelectedSubjectId("")
+                            }}
+                            placeholder="Buscar materia..."
+                            className="pl-9"
+                            autoComplete="off"
+                          />
+                        </div>
+                        {searchSubjectForEdit && !selectedSubjectId && (
+                          <div className="relative">
+                            <div className="absolute z-50 w-full max-h-48 overflow-y-auto border rounded-md bg-white shadow-lg">
+                              {subjects
+                                .filter((s) => s.name.toLowerCase().includes(searchSubjectForEdit.toLowerCase()))
+                                .map((subject) => (
+                                  <div
+                                    key={subject.id}
+                                    className="flex items-center justify-between p-3 hover:bg-secondary/50 cursor-pointer border-b last:border-b-0"
+                                    onClick={() => {
+                                      setSelectedSubjectId(subject.id)
+                                      setSearchSubjectForEdit(subject.name)
+                                    }}
+                                  >
+                                    <span className="text-sm">{subject.name}</span>
+                                  </div>
+                                ))}
+                              {subjects.filter((s) => s.name.toLowerCase().includes(searchSubjectForEdit.toLowerCase()))
+                                .length === 0 && (
+                                <div className="text-sm text-muted-foreground py-4 text-center">
+                                  No se encontraron materias
+                                </div>
                               )}
                             </div>
-                            <p className="text-sm">{supabaseStatus.message}</p>
-                            {supabaseStatus.error && (
-                              <p className="text-xs mt-2 font-mono bg-muted p-2 rounded">
-                                {supabaseStatus.error}
-                              </p>
-                            )}
-                          </AlertDescription>
-                        </Alert>
+                          </div>
+                        )}
                       </div>
-                    )}
 
-                    <div className="space-y-2">
-                      <Label>Información:</Label>
-                      <div className="text-sm text-muted-foreground space-y-1">
-                        <p>• El sistema está usando Supabase como base de datos</p>
-                        <p>• Asegúrate de haber ejecutado el script SQL en Supabase</p>
-                        <p>• Verifica que las políticas RLS estén configuradas correctamente</p>
+                      {/* Búsqueda de Curso */}
+                      <div className="space-y-2">
+                        <Label>Curso</Label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            value={searchCourseForEdit}
+                            onChange={(e) => {
+                              setSearchCourseForEdit(e.target.value)
+                              if (!e.target.value) setSelectedCourseId("")
+                            }}
+                            placeholder="Buscar curso..."
+                            className="pl-9"
+                            autoComplete="off"
+                          />
+                        </div>
+                        {searchCourseForEdit && !selectedCourseId && (
+                          <div className="relative">
+                            <div className="absolute z-50 w-full max-h-48 overflow-y-auto border rounded-md bg-white shadow-lg">
+                              {courses
+                                .filter((c) => c.name.toLowerCase().includes(searchCourseForEdit.toLowerCase()))
+                                .map((course) => (
+                                  <div
+                                    key={course.id}
+                                    className="flex items-center justify-between p-3 hover:bg-secondary/50 cursor-pointer border-b last:border-b-0"
+                                    onClick={() => {
+                                      setSelectedCourseId(course.id)
+                                      setSearchCourseForEdit(course.name)
+                                    }}
+                                  >
+                                    <span className="text-sm">{course.name}</span>
+                                  </div>
+                                ))}
+                              {courses.filter((c) => c.name.toLowerCase().includes(searchCourseForEdit.toLowerCase()))
+                                .length === 0 && (
+                                <div className="text-sm text-muted-foreground py-4 text-center">
+                                  No se encontraron cursos
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
+                    
+                    {/* Botón para agregar la asignación */}
+                    <Button 
+                      onClick={handleAddAssignmentToTeacher} 
+                      className="w-full bg-green-600 hover:bg-green-700"
+                      disabled={!selectedSubjectId || !selectedCourseId}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Agregar Asignación
+                    </Button>
                   </div>
-                )}
 
-                {!isSupabaseConfigured && (
-                  <div className="space-y-2">
-                    <Label>Estado Actual:</Label>
-                    <Alert>
-                      <AlertDescription>
-                        <p className="text-sm">
-                          El sistema está usando <strong>localStorage</strong> para almacenar los datos.
-                          Los datos se guardan solo en el navegador local.
-                        </p>
-                      </AlertDescription>
-                    </Alert>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  <Button onClick={handleEditTeacherSubject} className="w-full bg-blue-600 hover:bg-blue-700">
+                    Guardar Cambios
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Diálogo de Confirmación de Eliminación de Asignación */}
+            <Dialog open={isDeleteTeacherSubjectDialogOpen} onOpenChange={setIsDeleteTeacherSubjectDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Eliminar Asignación</DialogTitle>
+                  <DialogDescription>
+                    ¿Está seguro de que desea eliminar la asignación de "{deletingTeacherSubject?.name}"?
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-3 pt-4">
+                  <Button variant="outline" onClick={() => setIsDeleteTeacherSubjectDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button onClick={handleDeleteTeacherSubject} className="bg-red-600 hover:bg-red-700">
+                    Aceptar
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
         </Tabs>
       </div>

@@ -33,6 +33,7 @@ export function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
   const [courses, setCourses] = useState<Course[]>([])
   const [selectedLogbook, setSelectedLogbook] = useState<Logbook | null>(null)
   const [showNewClassForm, setShowNewClassForm] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   const [newSession, setNewSession] = useState<Partial<ClassSession>>({
     day: undefined,
@@ -59,32 +60,36 @@ export function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
   }, [])
 
   const loadData = async () => {
-    const teacherSubjects = await getTeacherSubjects()
-    const filtered = teacherSubjects.filter((ts) => ts.teacherId === user.id)
-    const allLogbooks: Logbook[] = []
+    try {
+      setIsLoading(true)
+      const teacherSubjects = await getTeacherSubjects()
+      const filtered = teacherSubjects.filter((ts) => ts.teacherId === user.id)
+      const allLogbooks: Logbook[] = []
 
-    for (const ts of filtered) {
-      let logbook = await getLogbookByTeacherAndSubject(user.id, ts.subjectId, ts.courseId)
-      if (!logbook) {
-        // Crear libro nuevo si no existe
-        logbook = {
-          id: Date.now().toString() + Math.random().toString(),
-          teacherId: user.id,
-          subjectId: ts.subjectId,
-          courseId: ts.courseId,
-          sessions: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+      for (const ts of filtered) {
+        let logbook = await getLogbookByTeacherAndSubject(user.id, ts.subjectId, ts.courseId)
+        if (!logbook) {
+          // Crear libro nuevo si no existe
+          const newLogbook: Omit<Logbook, 'id' | 'createdAt' | 'updatedAt'> & { id?: string, createdAt?: string, updatedAt?: string } = {
+            teacherId: user.id,
+            subjectId: ts.subjectId,
+            courseId: ts.courseId,
+            sessions: [],
+          }
+          logbook = await addOrUpdateLogbook(newLogbook as Logbook)
         }
-        await addOrUpdateLogbook(logbook)
+        allLogbooks.push(logbook)
       }
-      allLogbooks.push(logbook)
-    }
 
-    const [subjectsData, coursesData] = await Promise.all([getSubjects(), getCourses()])
-    setLogbooks(allLogbooks)
-    setSubjects(subjectsData)
-    setCourses(coursesData)
+      const [subjectsData, coursesData] = await Promise.all([getSubjects(), getCourses()])
+      setLogbooks(allLogbooks)
+      setSubjects(subjectsData)
+      setCourses(coursesData)
+    } catch (error) {
+      console.error('Error loading data:', error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const getSubjectName = (id: string) => {
@@ -201,9 +206,14 @@ export function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
       <div className="border-b border-primary/20 bg-primary/5">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Libro de Temas</h1>
-              <p className="text-muted-foreground">Bienvenido, {user.name}</p>
+            <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-700 p-3 rounded-lg">
+                <BookOpen className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">Libro Tema</h1>
+                <p className="text-muted-foreground">Bienvenido, {user.name}</p>
+              </div>
             </div>
             <Button variant="outline" onClick={onLogout} className="border-primary/20">
               <LogOut className="h-4 w-4 mr-2" />
@@ -215,17 +225,27 @@ export function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
 
       {/* Content */}
       <div className="container mx-auto px-4 py-6 max-w-7xl">
-        <div className="space-y-4">
-          {logbooks.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16">
-                <BookOpen className="h-20 w-20 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground text-lg text-center">
-                  No tienes materias asignadas. Contacta al administrador.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
+        {isLoading ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-16">
+              <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent mb-4"></div>
+              <p className="text-muted-foreground text-lg text-center">
+                Cargando tus libros de temas...
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {logbooks.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-16">
+                  <BookOpen className="h-20 w-20 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground text-lg text-center">
+                    No tienes materias asignadas. Contacta al administrador.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
             logbooks.map((logbook) => {
               const subjectName = getSubjectName(logbook.subjectId)
               const courseName = getCourseName(logbook.courseId)
@@ -508,8 +528,9 @@ export function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
                 </Card>
               )
             })
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -8,13 +8,18 @@ export async function getUsers(): Promise<User[]> {
     return []
   }
 
+  // Optimizar: solo seleccionar los campos necesarios
   const { data, error } = await supabase
     .from('users')
-    .select('*')
+    .select('id, dni, name, password, role, created_at')
     .order('created_at', { ascending: false })
 
   if (error) {
     console.error('Error fetching users:', error)
+    return []
+  }
+
+  if (!data) {
     return []
   }
 
@@ -56,6 +61,55 @@ export async function addUser(user: Omit<User, 'id' | 'createdAt'>): Promise<Use
     password: data.password,
     role: data.role as User['role'],
     createdAt: data.created_at,
+  }
+}
+
+export async function updateUser(id: string, updates: Partial<Omit<User, 'id' | 'createdAt'>>): Promise<User> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const updateData: any = {}
+  if (updates.dni !== undefined) updateData.dni = updates.dni
+  if (updates.name !== undefined) updateData.name = updates.name
+  if (updates.password !== undefined) updateData.password = updates.password
+  if (updates.role !== undefined) updateData.role = updates.role
+
+  const { data, error } = await supabase
+    .from('users')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating user:', error)
+    throw error
+  }
+
+  return {
+    id: data.id,
+    dni: data.dni,
+    name: data.name,
+    password: data.password,
+    role: data.role as User['role'],
+    createdAt: data.created_at,
+  }
+}
+
+export async function deleteUser(id: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const { error } = await supabase
+    .from('users')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting user:', error)
+    throw error
   }
 }
 
@@ -158,6 +212,49 @@ export async function addSubject(subject: Omit<Subject, 'id' | 'createdAt'>): Pr
   }
 }
 
+export async function updateSubject(id: string, updates: Partial<Omit<Subject, 'id' | 'createdAt'>>): Promise<Subject> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const updateData: any = {}
+  if (updates.name !== undefined) updateData.name = updates.name
+
+  const { data, error } = await supabase
+    .from('subjects')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating subject:', error)
+    throw error
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    createdAt: data.created_at,
+  }
+}
+
+export async function deleteSubject(id: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const { error } = await supabase
+    .from('subjects')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting subject:', error)
+    throw error
+  }
+}
+
 // Funciones para Cursos
 export async function getCourses(): Promise<Course[]> {
   return new Promise(async (resolve) => {
@@ -204,6 +301,49 @@ export async function addCourse(course: Omit<Course, 'id' | 'createdAt'>): Promi
     id: data.id,
     name: data.name,
     createdAt: data.created_at,
+  }
+}
+
+export async function updateCourse(id: string, updates: Partial<Omit<Course, 'id' | 'createdAt'>>): Promise<Course> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const updateData: any = {}
+  if (updates.name !== undefined) updateData.name = updates.name
+
+  const { data, error } = await supabase
+    .from('courses')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating course:', error)
+    throw error
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    createdAt: data.created_at,
+  }
+}
+
+export async function deleteCourse(id: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const { error } = await supabase
+    .from('courses')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting course:', error)
+    throw error
   }
 }
 
@@ -257,6 +397,22 @@ export async function addSubjectCourse(
     subjectId: data.subject_id,
     courseId: data.course_id,
     createdAt: data.created_at,
+  }
+}
+
+export async function deleteSubjectCourse(id: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const { error } = await supabase
+    .from('subject_courses')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting subject course:', error)
+    throw error
   }
 }
 
@@ -316,6 +472,53 @@ export async function addTeacherSubject(
   }
 }
 
+export async function updateTeacherSubject(id: string, updates: Partial<Omit<TeacherSubject, 'id' | 'createdAt'>>): Promise<TeacherSubject> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const updateData: any = {}
+  if (updates.teacherId !== undefined) updateData.teacher_id = updates.teacherId
+  if (updates.subjectId !== undefined) updateData.subject_id = updates.subjectId
+  if (updates.courseId !== undefined) updateData.course_id = updates.courseId
+
+  const { data, error } = await supabase
+    .from('teacher_subjects')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating teacher subject:', error)
+    throw error
+  }
+
+  return {
+    id: data.id,
+    teacherId: data.teacher_id,
+    subjectId: data.subject_id,
+    courseId: data.course_id,
+    createdAt: data.created_at,
+  }
+}
+
+export async function deleteTeacherSubject(id: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  const { error } = await supabase
+    .from('teacher_subjects')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting teacher subject:', error)
+    throw error
+  }
+}
+
 // Funciones para Libros de Temas
 export async function getLogbooks(): Promise<Logbook[]> {
   if (!supabase) {
@@ -365,9 +568,14 @@ export async function getLogbookByTeacherAndSubject(
     .eq('teacher_id', teacherId)
     .eq('subject_id', subjectId)
     .eq('course_id', courseId)
-    .single()
+    .maybeSingle()
 
-  if (error || !data) {
+  if (error) {
+    console.error('Error getting logbook by teacher and subject:', error)
+    return undefined
+  }
+  
+  if (!data) {
     return undefined
   }
 
@@ -389,12 +597,30 @@ export async function addOrUpdateLogbook(logbook: Logbook): Promise<Logbook> {
     throw new Error('Supabase no está configurado')
   }
 
-  // Verificar si existe
-  const existing = await getLogbookByTeacherAndSubject(
-    logbook.teacherId,
-    logbook.subjectId,
-    logbook.courseId
-  )
+  // Verificar si existe por ID o por combinación teacher/subject/course
+  let existing = null
+  if (logbook.id) {
+    const { data, error } = await supabase
+      .from('logbooks')
+      .select('*')
+      .eq('id', logbook.id)
+      .maybeSingle()
+    
+    // Ignorar error si no existe, solo si es otro tipo de error
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error checking existing logbook by ID:', error)
+    }
+    existing = data
+  }
+  
+  // Si no existe por ID, verificar por combinación
+  if (!existing) {
+    existing = await getLogbookByTeacherAndSubject(
+      logbook.teacherId,
+      logbook.subjectId,
+      logbook.courseId
+    )
+  }
 
   if (existing) {
     // Actualizar
@@ -403,7 +629,7 @@ export async function addOrUpdateLogbook(logbook: Logbook): Promise<Logbook> {
       .update({
         updated_at: new Date().toISOString(),
       })
-      .eq('id', logbook.id)
+      .eq('id', existing.id)
       .select()
       .single()
 
@@ -413,10 +639,12 @@ export async function addOrUpdateLogbook(logbook: Logbook): Promise<Logbook> {
     }
 
     // Actualizar sesiones
-    await updateClassSessions(logbook.id, logbook.sessions)
+    await updateClassSessions(existing.id, logbook.sessions || [])
 
     return {
       ...logbook,
+      id: data.id,
+      createdAt: data.created_at,
       updatedAt: data.updated_at,
     }
   } else {
@@ -437,13 +665,14 @@ export async function addOrUpdateLogbook(logbook: Logbook): Promise<Logbook> {
     }
 
     // Agregar sesiones
-    if (logbook.sessions.length > 0) {
+    if (logbook.sessions && logbook.sessions.length > 0) {
       await addClassSessions(data.id, logbook.sessions)
     }
 
     return {
       ...logbook,
       id: data.id,
+      sessions: logbook.sessions || [],
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     }

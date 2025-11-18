@@ -10,24 +10,36 @@ import { getCurrentUser, setCurrentUser, initializeData } from "@/lib/storage-in
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
-  const [isClient, setIsClient] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    setIsClient(true)
     const init = async () => {
       try {
-        await initializeData()
+        // Verificar primero si hay un usuario guardado (más rápido)
         const currentUser = getCurrentUser()
         if (currentUser) {
           setUser(currentUser)
+          setIsLoading(false)
+          // Inicializar datos en segundo plano
+          initializeData().catch(console.error)
+          return
+        }
+
+        // Si no hay usuario, inicializar datos y luego verificar de nuevo
+        await initializeData()
+        const userAfterInit = getCurrentUser()
+        if (userAfterInit) {
+          setUser(userAfterInit)
         }
       } catch (error) {
         console.error('Error al inicializar datos:', error)
-        // Continuar incluso si hay un error
+        // Verificar si hay usuario incluso si hay error
         const currentUser = getCurrentUser()
         if (currentUser) {
           setUser(currentUser)
         }
+      } finally {
+        setIsLoading(false)
       }
     }
     init()
@@ -57,11 +69,14 @@ export default function Home() {
     }
   }
 
-  // Evitar renderizar hasta que estemos en el cliente para evitar problemas de hidratación
-  if (!isClient) {
+  // Mostrar loading mientras se verifica la sesión
+  if (isLoading) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-muted-foreground">Cargando...</div>
+        <div className="text-center space-y-2">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+          <div className="text-muted-foreground">Cargando...</div>
+        </div>
       </main>
     )
   }
