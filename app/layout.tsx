@@ -16,9 +16,16 @@ export const metadata: Metadata = {
         url: '/icon.svg',
         type: 'image/svg+xml',
       },
+      {
+        url: '/icon-light-32x32.png',
+        sizes: '32x32',
+        type: 'image/png',
+      },
     ],
+    shortcut: '/icon.svg',
     apple: '/apple-icon.png',
   },
+  manifest: '/site.webmanifest',
 }
 
 export default function RootLayout({
@@ -28,6 +35,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
+      <head>
+        <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/icon-light-32x32.png" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
+        <link rel="manifest" href="/site.webmanifest" />
+      </head>
       <body className="font-sans antialiased">
         {children}
         <Analytics />

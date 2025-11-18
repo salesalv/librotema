@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <rect width="200" height="200" rx="40" fill="url(#gradient)"/>
+  <defs>
+    <linearGradient id="gradient" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+  </defs>
+  <!-- Libro abierto -->
+  <g transform="translate(40, 50)">
+    <!-- Página izquierda -->
+    <path d="M 10 10 Q 10 5 15 5 L 55 5 L 55 90 Q 55 95 50 95 L 15 95 Q 10 95 10 90 Z" fill="#93C5FD" stroke="#DBEAFE" stroke-width="2"/>
+    <path d="M 20 20 L 45 20 M 20 30 L 45 30 M 20 40 L 45 40 M 20 50 L 40 50" stroke="#1D4ED8" stroke-width="1.5" stroke-linecap="round"/>
+    
+    <!-- Página derecha -->
+    <path d="M 65 5 L 105 5 Q 110 5 110 10 L 110 90 Q 110 95 105 95 L 70 95 Q 65 95 65 90 Z" fill="#93C5FD" stroke="#DBEAFE" stroke-width="2"/>
+    <path d="M 75 20 L 100 20 M 75 30 L 100 30 M 75 40 L 100 40 M 80 50 L 100 50" stroke="#1D4ED8" stroke-width="1.5" stroke-linecap="round"/>
+    
+    <!-- Lomo del libro -->
+    <path d="M 55 5 L 65 5 L 65 95 L 55 95 Z" fill="#60A5FA"/>
+    <ellipse cx="60" cy="95" rx="5" ry="2" fill="#3B82F6"/>
+  </g>
+</svg>
