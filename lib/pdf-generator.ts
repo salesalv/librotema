@@ -81,9 +81,9 @@ export function generateLogbookPDF(options: PDFGeneratorOptions) {
       session.classCharacter,
       session.content,
       session.task,
-      session.teacherVerification ? '✓✓' : '',
+      session.teacherVerification ? 'Verificado' : '',
       session.observations || '-',
-      session.directorVerification?.verified ? '✓ Verificado' : 'Pendiente'
+      session.directorVerification?.verified ? 'Verificado' : 'Pendiente'
     ]
   })
 
@@ -123,11 +123,11 @@ export function generateLogbookPDF(options: PDFGeneratorOptions) {
       1: { cellWidth: 22, halign: 'center' }, // Mes
       2: { cellWidth: 15, halign: 'center' }, // Clase N°
       3: { cellWidth: 25, halign: 'center' }, // Carácter
-      4: { cellWidth: 55, halign: 'left' },   // Contenido
-      5: { cellWidth: 50, halign: 'left' },   // Tarea
-      6: { cellWidth: 15, halign: 'center' }, // Verif. Profesor
-      7: { cellWidth: 45, halign: 'left' },   // Observaciones
-      8: { cellWidth: 23, halign: 'center' }  // Verif. Director
+      4: { cellWidth: 52, halign: 'left' },   // Contenido
+      5: { cellWidth: 48, halign: 'left' },   // Tarea
+      6: { cellWidth: 20, halign: 'center' }, // Verif. Profesor
+      7: { cellWidth: 42, halign: 'left' },   // Observaciones
+      8: { cellWidth: 24, halign: 'center' }  // Verif. Director
     },
     alternateRowStyles: {
       fillColor: [245, 245, 245]

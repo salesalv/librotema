@@ -30,25 +30,52 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
   const [logbooks, setLogbooks] = useState<Logbook[]>([])
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [courses, setCourses] = useState<Course[]>([])
-  const [selectedTeacher, setSelectedTeacher] = useState<string>("")
+  const [teacherSubjects, setTeacherSubjects] = useState<any[]>([])
+  const [courseFilter, setCourseFilter] = useState<string>("all")
   const [subjectFilter, setSubjectFilter] = useState<string>("all")
+  const [selectedTeacher, setSelectedTeacher] = useState<string>("")
   const [expandedLogbooks, setExpandedLogbooks] = useState<Set<string>>(new Set())
+  
+  // Filtros por logbook (cada logbook tiene sus propios filtros)
+  const [sessionFilters, setSessionFilters] = useState<Record<string, {
+    month: string
+    character: string
+    sortOrder: 'asc' | 'desc'
+  }>>({})
+  
+  // Inicializar filtros para un logbook
+  const getSessionFilter = (logbookId: string) => {
+    return sessionFilters[logbookId] || { month: 'all', character: 'all', sortOrder: 'asc' }
+  }
+  
+  // Actualizar filtro de un logbook específico
+  const updateSessionFilter = (logbookId: string, filterKey: string, value: any) => {
+    setSessionFilters(prev => ({
+      ...prev,
+      [logbookId]: {
+        ...getSessionFilter(logbookId),
+        [filterKey]: value
+      }
+    }))
+  }
 
   useEffect(() => {
     loadData()
   }, [])
 
   const loadData = async () => {
-    const [allUsers, allLogbooks, allSubjects, allCourses] = await Promise.all([
+    const [allUsers, allLogbooks, allSubjects, allCourses, allTeacherSubjects] = await Promise.all([
       getUsers(),
       getLogbooks(),
       getSubjects(),
       getCourses(),
+      getTeacherSubjects(),
     ])
     setTeachers(allUsers.filter((u) => u.role === "profesor"))
     setLogbooks(allLogbooks)
     setSubjects(allSubjects)
     setCourses(allCourses)
+    setTeacherSubjects(allTeacherSubjects)
   }
 
   const getSubjectName = (id: string) => {
@@ -63,14 +90,125 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
     return teachers.find((u) => u.id === id)?.name || "N/A"
   }
 
+  const getMonthName = (month: number) => {
+    const months = [
+      "Enero",
+      "Febrero",
+      "Marzo",
+      "Abril",
+      "Mayo",
+      "Junio",
+      "Julio",
+      "Agosto",
+      "Septiembre",
+      "Octubre",
+      "Noviembre",
+      "Diciembre",
+    ]
+    return months[month - 1] || ""
+  }
+
+  const classCharacters = ["Teórica", "Práctica", "Teórico-Práctica", "Evaluación", "Otras"] as const
+
+  // Filtrar y ordenar sesiones de un logbook
+  const getFilteredAndSortedSessions = (logbook: Logbook) => {
+    const filter = getSessionFilter(logbook.id)
+    let filtered = [...logbook.sessions]
+
+    // Filtrar por mes
+    if (filter.month !== 'all') {
+      filtered = filtered.filter(s => s.month === parseInt(filter.month))
+    }
+
+    // Filtrar por carácter
+    if (filter.character !== 'all') {
+      filtered = filtered.filter(s => s.classCharacter === filter.character)
+    }
+
+    // Ordenar por número de clase
+    filtered.sort((a, b) => {
+      if (filter.sortOrder === 'asc') {
+        return (a.classNumber || 0) - (b.classNumber || 0)
+      } else {
+        return (b.classNumber || 0) - (a.classNumber || 0)
+      }
+    })
+
+    return filtered
+  }
+
+  // Obtener materias disponibles según el curso seleccionado
+  const getAvailableSubjects = () => {
+    if (courseFilter === "all") {
+      // Si no hay curso seleccionado, mostrar todas las materias
+      return subjects
+    }
+    
+    // Obtener las materias del curso seleccionado
+    const subjectIds = teacherSubjects
+      .filter(ts => ts.courseId === courseFilter)
+      .map(ts => ts.subjectId)
+    
+    return subjects.filter(subject => subjectIds.includes(subject.id))
+  }
+
+  // Obtener profesores disponibles según curso y materia
+  const getAvailableTeachers = () => {
+    let filtered = teacherSubjects
+
+    // Filtrar por curso
+    if (courseFilter !== "all") {
+      filtered = filtered.filter(ts => ts.courseId === courseFilter)
+    }
+
+    // Filtrar por materia
+    if (subjectFilter !== "all") {
+      filtered = filtered.filter(ts => ts.subjectId === subjectFilter)
+    }
+
+    // Obtener IDs únicos de profesores
+    const teacherIds = Array.from(new Set(filtered.map(ts => ts.teacherId)))
+    
+    return teachers.filter(teacher => teacherIds.includes(teacher.id))
+  }
+
+  // Limpiar filtros en cascada cuando cambia el curso
+  useEffect(() => {
+    setSubjectFilter("all")
+    setSelectedTeacher("")
+  }, [courseFilter])
+
+  // Autocompletar profesor y limpiar cuando cambia la materia
+  useEffect(() => {
+    setSelectedTeacher("")
+    
+    // Si hay materia seleccionada, verificar si solo hay un profesor
+    if (subjectFilter !== "all" && courseFilter !== "all") {
+      let filtered = teacherSubjects
+        .filter(ts => ts.courseId === courseFilter)
+        .filter(ts => ts.subjectId === subjectFilter)
+      
+      const teacherIds = Array.from(new Set(filtered.map(ts => ts.teacherId)))
+      const availableTeachers = teachers.filter(teacher => teacherIds.includes(teacher.id))
+      
+      if (availableTeachers.length === 1) {
+        setSelectedTeacher(availableTeachers[0].id)
+      }
+    }
+  }, [subjectFilter, courseFilter, teacherSubjects, teachers])
+
   const filteredLogbooks = logbooks
     .filter((l) => {
-      // Filtro por profesor
-      if (selectedTeacher && selectedTeacher !== "all" && l.teacherId !== selectedTeacher) {
+      // Filtro por curso
+      if (courseFilter !== "all" && l.courseId !== courseFilter) {
         return false
       }
       // Filtro por materia
       if (subjectFilter !== "all" && l.subjectId !== subjectFilter) {
+        return false
+      }
+      // Filtro por profesor
+      if (selectedTeacher && selectedTeacher !== "all" && l.teacherId !== selectedTeacher) {
         return false
       }
       return true
@@ -171,19 +309,19 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
           {/* Filtros */}
           <Card className="border-primary/30">
             <CardContent className="pt-6">
-              <div className="flex flex-col md:flex-row gap-4">
-                {/* Filtro de Profesor */}
-                <div className="flex items-center gap-4 flex-1">
-                  <Label htmlFor="teacher-filter" className="whitespace-nowrap font-semibold">Filtrar por Profesor:</Label>
-                  <Select value={selectedTeacher || "all"} onValueChange={(value) => setSelectedTeacher(value === "all" ? "" : value)}>
-                    <SelectTrigger id="teacher-filter" className="w-full max-w-xs">
-                      <SelectValue placeholder="Todos los profesores" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Filtro de Curso */}
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="course-filter" className="font-semibold">1. Filtrar por Curso:</Label>
+                  <Select value={courseFilter} onValueChange={setCourseFilter}>
+                    <SelectTrigger id="course-filter">
+                      <SelectValue placeholder="Todos los cursos" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos los profesores</SelectItem>
-                      {teachers.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.name}
+                      <SelectItem value="all">Todos los cursos</SelectItem>
+                      {courses.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -191,17 +329,35 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
                 </div>
 
                 {/* Filtro de Materia */}
-                <div className="flex items-center gap-4 flex-1">
-                  <Label htmlFor="subject-filter" className="whitespace-nowrap font-semibold">Filtrar por Materia:</Label>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="subject-filter" className="font-semibold">2. Filtrar por Materia:</Label>
                   <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                    <SelectTrigger id="subject-filter" className="w-full max-w-xs">
+                    <SelectTrigger id="subject-filter">
                       <SelectValue placeholder="Todas las materias" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas las materias</SelectItem>
-                      {subjects.map((s) => (
+                      {getAvailableSubjects().map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Filtro de Profesor */}
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="teacher-filter" className="font-semibold">3. Filtrar por Profesor:</Label>
+                  <Select value={selectedTeacher || "all"} onValueChange={(value) => setSelectedTeacher(value === "all" ? "" : value)}>
+                    <SelectTrigger id="teacher-filter">
+                      <SelectValue placeholder="Todos los profesores" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos los profesores</SelectItem>
+                      {getAvailableTeachers().map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -286,6 +442,74 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
 
                         {isExpanded && (
                           <CardContent className="pt-0 pb-6">
+                            {/* Filtros de sesiones */}
+                            {logbook.sessions.length > 0 && (
+                              <Card className="mb-4 bg-muted/30">
+                                <CardContent className="pt-4">
+                                  <div className="flex flex-wrap gap-3 items-end">
+                                    {/* Filtro por mes */}
+                                    <div className="flex-1 min-w-[150px]">
+                                      <Label htmlFor={`month-filter-${logbook.id}`} className="text-sm font-medium">Filtrar por Mes:</Label>
+                                      <Select 
+                                        value={getSessionFilter(logbook.id).month} 
+                                        onValueChange={(value) => updateSessionFilter(logbook.id, 'month', value)}
+                                      >
+                                        <SelectTrigger id={`month-filter-${logbook.id}`} className="mt-1">
+                                          <SelectValue placeholder="Todos los meses" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="all">Todos los meses</SelectItem>
+                                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(month => (
+                                            <SelectItem key={month} value={month.toString()}>
+                                              {getMonthName(month)}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    {/* Filtro por carácter */}
+                                    <div className="flex-1 min-w-[150px]">
+                                      <Label htmlFor={`character-filter-${logbook.id}`} className="text-sm font-medium">Filtrar por Carácter:</Label>
+                                      <Select 
+                                        value={getSessionFilter(logbook.id).character} 
+                                        onValueChange={(value) => updateSessionFilter(logbook.id, 'character', value)}
+                                      >
+                                        <SelectTrigger id={`character-filter-${logbook.id}`} className="mt-1">
+                                          <SelectValue placeholder="Todos los caracteres" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="all">Todos los caracteres</SelectItem>
+                                          {classCharacters.map(char => (
+                                            <SelectItem key={char} value={char}>
+                                              {char}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    {/* Botón de orden */}
+                                    <div className="flex-1 min-w-[150px]">
+                                      <Label className="text-sm font-medium">Ordenar por N° Clase:</Label>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => updateSessionFilter(
+                                          logbook.id, 
+                                          'sortOrder', 
+                                          getSessionFilter(logbook.id).sortOrder === 'asc' ? 'desc' : 'asc'
+                                        )}
+                                        className="w-full mt-1"
+                                      >
+                                        {getSessionFilter(logbook.id).sortOrder === 'asc' ? '↑ Ascendente' : '↓ Descendente'}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+
                             <div className="overflow-x-auto">
                               <Table>
                               <TableHeader>
@@ -301,7 +525,7 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {logbook.sessions.map((session, index) => {
+                                {getFilteredAndSortedSessions(logbook).map((session, index) => {
                                   const date = new Date(session.createdAt)
                                   const day = date.getDate()
                                   const month = date.getMonth() + 1
@@ -309,7 +533,7 @@ export function DirectorDashboard({ user, onLogout }: DirectorDashboardProps) {
                                   return (
                                     <TableRow key={session.id}>
                                       <TableCell>{session.day || day}</TableCell>
-                                      <TableCell>{session.month || month}</TableCell>
+                                      <TableCell>{getMonthName(session.month || month)}</TableCell>
                                       <TableCell>{session.classNumber || index + 1}</TableCell>
                                       <TableCell>
                                         <Badge variant="outline">{session.classCharacter}</Badge>
