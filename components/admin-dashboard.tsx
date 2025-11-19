@@ -34,6 +34,7 @@ import {
   getTeacherSubjects,
   addTeacherSubject,
   updateTeacherSubject,
+  deleteTeacherSubject,
   deleteMultipleTeacherSubjects,
 } from "@/lib/storage-index"
 import { toast } from "sonner"
@@ -465,7 +466,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         division: editCourse.division,
         turno: editCourse.turno,
         especialidadId: editCourse.year >= 3 ? editCourse.especialidadId : null,
-      })
+      } as Parameters<typeof updateCourse>[1])
 
       // Actualizar la lista de cursos en memoria
       setCourses(courses.map((c) => (c.id === editingCourse.id ? updatedCourse : c)))
@@ -551,7 +552,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
         division: newCourse.division,
         turno: newCourse.turno,
         especialidadId: newCourse.year >= 3 ? newCourse.especialidadId : null,
-      })
+      } as Parameters<typeof addCourse>[0])
       
       // Actualizar la lista en memoria
       setCourses([...courses, createdCourse])
@@ -956,7 +957,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                 <BookOpen className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Libro Tema</h1>
+                <h1 className="text-2xl font-bold text-foreground">Libro de Tema</h1>
                 <p className="text-muted-foreground">Bienvenido, {user.name}</p>
               </div>
             </div>

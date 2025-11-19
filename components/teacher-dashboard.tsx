@@ -305,7 +305,7 @@ export function TeacherDashboard({ user, onLogout }: TeacherDashboardProps) {
                 <BookOpen className="h-8 w-8 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Libro Tema</h1>
+                <h1 className="text-2xl font-bold text-foreground">Libro de Tema</h1>
                 <p className="text-muted-foreground">Bienvenido, {user.name}</p>
               </div>
             </div>
