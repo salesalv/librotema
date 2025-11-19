@@ -23,6 +23,8 @@ export const updateSubject = useSupabase ? supabaseStorage.updateSubject : (id: 
 export const deleteSubject = useSupabase ? supabaseStorage.deleteSubject : (id: string) => Promise.resolve(localStorageStorage.deleteSubject(id))
 export const deleteMultipleSubjects = useSupabase ? supabaseStorage.deleteMultipleSubjects : (ids: string[]) => Promise.resolve(ids.forEach(id => localStorageStorage.deleteSubject(id)))
 
+export const getEspecialidades = useSupabase ? supabaseStorage.getEspecialidades : () => Promise.resolve([])
+
 export const getCourses = useSupabase ? supabaseStorage.getCourses : () => Promise.resolve(localStorageStorage.getCourses())
 export const addCourse = useSupabase ? supabaseStorage.addCourse : (course: Parameters<typeof localStorageStorage.addCourse>[0]) => Promise.resolve(localStorageStorage.addCourse(course))
 export const updateCourse = useSupabase ? supabaseStorage.updateCourse : (id: string, updates: Parameters<typeof localStorageStorage.updateCourse>[1]) => Promise.resolve(localStorageStorage.updateCourse(id, updates))

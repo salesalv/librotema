@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { LogOut, BookOpen, Plus, CheckCircle, Eye, Download } from "lucide-react"
-import type { User, Logbook, ClassSession, ClassCharacter } from "@/lib/types"
+import type { User, Logbook, ClassSession, ClassCharacter, Subject, Course } from "@/lib/types"
 import {
   getSubjects,
   getCourses,

@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
 import { LogOut, Users, BookOpen, GraduationCap, UserPlus, Plus, X, Pencil, Search } from "lucide-react"
-import type { User, Subject, Course, SubjectCourse, TeacherSubject } from "@/lib/types"
+import type { User, Subject, Course, SubjectCourse, TeacherSubject, Especialidad, Turno } from "@/lib/types"
 import {
   getUsers,
   addUser,
@@ -23,6 +23,7 @@ import {
   addSubject,
   updateSubject,
   deleteMultipleSubjects,
+  getEspecialidades,
   getCourses,
   addCourse,
   updateCourse,
@@ -46,6 +47,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [users, setUsers] = useState<User[]>([])
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [courses, setCourses] = useState<Course[]>([])
+  const [especialidades, setEspecialidades] = useState<Especialidad[]>([])
   const [subjectCourses, setSubjectCourses] = useState<SubjectCourse[]>([])
   const [teacherSubjects, setTeacherSubjects] = useState<TeacherSubject[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -66,8 +68,8 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [editUser, setEditUser] = useState({ dni: "", name: "", password: "", role: "profesor" as User["role"] })
   const [newSubject, setNewSubject] = useState({ name: "" })
   const [editSubject, setEditSubject] = useState({ name: "" })
-  const [newCourse, setNewCourse] = useState({ name: "" })
-  const [editCourse, setEditCourse] = useState({ name: "" })
+  const [newCourse, setNewCourse] = useState({ year: 1, division: 1, turno: "Mañana" as Turno, especialidadId: "" })
+  const [editCourse, setEditCourse] = useState({ year: 1, division: 1, turno: "Mañana" as Turno, especialidadId: "" })
   const [searchSubject, setSearchSubject] = useState("")
   const [courseSubjects, setCourseSubjects] = useState<string[]>([])
   const [originalCourseSubjects, setOriginalCourseSubjects] = useState<string[]>([])
@@ -109,14 +111,16 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       setUsers(usersData)
       
       // Luego cargar el resto en paralelo
-      const [subjectsData, coursesData, subjectCoursesData, teacherSubjectsData] = await Promise.all([
+      const [subjectsData, especialidadesData, coursesData, subjectCoursesData, teacherSubjectsData] = await Promise.all([
         getSubjects(),
+        getEspecialidades(),
         getCourses(),
         getSubjectCourses(),
         getTeacherSubjects(),
       ])
       
       setSubjects(subjectsData)
+      setEspecialidades(especialidadesData)
       setCourses(coursesData)
       setSubjectCourses(subjectCoursesData)
       setTeacherSubjects(teacherSubjectsData)
@@ -387,7 +391,12 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
   const openEditCourseDialog = (course: Course) => {
     setEditingCourse(course)
-    setEditCourse({ name: course.name })
+    setEditCourse({ 
+      year: course.year,
+      division: course.division,
+      turno: course.turno,
+      especialidadId: course.especialidadId || ""
+    })
     setSearchSubject("")
     
     // Obtener las materias asignadas a este curso
@@ -425,32 +434,41 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const handleEditCourse = async () => {
     if (!editingCourse) return
 
-    if (!editCourse.name.trim()) {
+    // Validar especialidad requerida para años 3-6
+    if (editCourse.year >= 3 && !editCourse.especialidadId) {
       toast.error("Campo incompleto", {
-        description: "Por favor ingrese el nombre del curso.",
+        description: "Por favor seleccione una especialidad para cursos de 3ro en adelante.",
       })
       return
     }
 
     try {
-      const courseName = editCourse.name.trim()
-
-      // Verificar si ya existe otro curso con ese nombre
-      const existingCourse = courses.find(
-        (c) => c.name.toLowerCase() === courseName.toLowerCase() && c.id !== editingCourse.id
+      // Verificar si ya existe otro curso con la misma combinación
+      const isDuplicate = courses.some((c) => 
+        c.id !== editingCourse.id &&
+        c.year === editCourse.year && 
+        c.division === editCourse.division &&
+        c.turno === editCourse.turno && 
+        c.especialidadId === (editCourse.especialidadId || null)
       )
-      if (existingCourse) {
-        toast.error("Nombre duplicado", {
-          description: `Ya existe otro curso con el nombre "${courseName}".`,
+      
+      if (isDuplicate) {
+        toast.error("Curso duplicado", {
+          description: `Ya existe otro curso con esta combinación de año, división, turno y especialidad.`,
         })
         return
       }
 
-      // Actualizar el nombre del curso
-      await updateCourse(editingCourse.id, { name: courseName })
+      // Actualizar el curso
+      const updatedCourse = await updateCourse(editingCourse.id, { 
+        year: editCourse.year,
+        division: editCourse.division,
+        turno: editCourse.turno,
+        especialidadId: editCourse.year >= 3 ? editCourse.especialidadId : null,
+      })
 
       // Actualizar la lista de cursos en memoria
-      setCourses(courses.map((c) => (c.id === editingCourse.id ? { ...c, name: courseName } : c)))
+      setCourses(courses.map((c) => (c.id === editingCourse.id ? updatedCourse : c)))
 
       // Sincronizar las materias asignadas
       // 1. Encontrar materias que se eliminaron
@@ -487,13 +505,13 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       // Cerrar el diálogo y limpiar el estado
       setIsEditCourseDialogOpen(false)
       setEditingCourse(null)
-      setEditCourse({ name: "" })
+      setEditCourse({ year: 1, division: 1, turno: "Mañana", especialidadId: "" })
       setCourseSubjects([])
       setOriginalCourseSubjects([])
       setSearchSubject("")
 
       toast.success("Curso actualizado", {
-        description: `El curso ${courseName} y sus materias han sido actualizados correctamente.`,
+        description: `El curso ${updatedCourse.name} y sus materias han sido actualizados correctamente.`,
       })
     } catch (error: any) {
       console.error("Error al actualizar curso:", error)
@@ -504,37 +522,48 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   }
 
   const handleAddCourse = async () => {
-    if (!newCourse.name.trim()) {
+    // Validar especialidad requerida para años 3-6
+    if (newCourse.year >= 3 && !newCourse.especialidadId) {
       toast.error("Campo incompleto", {
-        description: "Por favor ingrese el nombre del curso.",
+        description: "Por favor seleccione una especialidad para cursos de 3ro en adelante.",
       })
       return
     }
 
     try {
-      const courseName = newCourse.name.trim()
+      // Verificar si ya existe un curso con la misma combinación
+      const isDuplicate = courses.some((c) => 
+        c.year === newCourse.year && 
+        c.division === newCourse.division &&
+        c.turno === newCourse.turno && 
+        c.especialidadId === (newCourse.especialidadId || null)
+      )
       
-      // Verificar si el curso ya existe
-      if (courses.find((c) => c.name.toLowerCase() === courseName.toLowerCase())) {
+      if (isDuplicate) {
         toast.error("Curso duplicado", {
-          description: `Ya existe un curso con el nombre "${courseName}".`,
+          description: `Ya existe un curso con esta combinación de año, división, turno y especialidad.`,
         })
         return
       }
 
-      const createdCourse = await addCourse({ name: courseName })
+      const createdCourse = await addCourse({ 
+        year: newCourse.year,
+        division: newCourse.division,
+        turno: newCourse.turno,
+        especialidadId: newCourse.year >= 3 ? newCourse.especialidadId : null,
+      })
       
       // Actualizar la lista en memoria
       setCourses([...courses, createdCourse])
       
       // Limpiar formulario
-      setNewCourse({ name: "" })
+      setNewCourse({ year: 1, division: 1, turno: "Mañana", especialidadId: "" })
       
       // Cerrar el diálogo
       setIsCourseDialogOpen(false)
       
       toast.success("Curso creado exitosamente", {
-        description: `El curso ${courseName} ha sido creado correctamente.`,
+        description: `El curso ${createdCourse.name} ha sido creado correctamente.`,
       })
     } catch (error: any) {
       console.error("Error al crear curso:", error)
@@ -1346,17 +1375,92 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                       <DialogContent>
                         <DialogHeader>
                           <DialogTitle>Crear Nuevo Curso</DialogTitle>
-                          <DialogDescription>Ingrese el nombre del curso</DialogDescription>
+                          <DialogDescription>Configure el año, turno y especialidad del curso</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 py-4">
+                          {/* Año */}
                           <div className="space-y-2">
-                            <Label>Nombre del Curso</Label>
-                            <Input
-                              value={newCourse.name}
-                              onChange={(e) => setNewCourse({ name: e.target.value })}
-                              placeholder="Ej: 3° A"
-                            />
+                            <Label>Año del Curso</Label>
+                            <Select
+                              value={newCourse.year.toString()}
+                              onValueChange={(value) => setNewCourse({ ...newCourse, year: parseInt(value), especialidadId: parseInt(value) < 3 ? "" : newCourse.especialidadId })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="1">1ro</SelectItem>
+                                <SelectItem value="2">2do</SelectItem>
+                                <SelectItem value="3">3ro</SelectItem>
+                                <SelectItem value="4">4to</SelectItem>
+                                <SelectItem value="5">5to</SelectItem>
+                                <SelectItem value="6">6to</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
+
+                          {/* División */}
+                          <div className="space-y-2">
+                            <Label>División</Label>
+                            <Select
+                              value={newCourse.division.toString()}
+                              onValueChange={(value) => setNewCourse({ ...newCourse, division: parseInt(value) })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="1">1ra</SelectItem>
+                                <SelectItem value="2">2da</SelectItem>
+                                <SelectItem value="3">3ra</SelectItem>
+                                <SelectItem value="4">4ta</SelectItem>
+                                <SelectItem value="5">5ta</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Turno */}
+                          <div className="space-y-2">
+                            <Label>Turno</Label>
+                            <Select
+                              value={newCourse.turno}
+                              onValueChange={(value) => setNewCourse({ ...newCourse, turno: value as Turno })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Mañana">Mañana</SelectItem>
+                                <SelectItem value="Tarde">Tarde</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Especialidad (solo para 3ro en adelante) */}
+                          {newCourse.year >= 3 && (
+                            <div className="space-y-2">
+                              <Label>Especialidad *</Label>
+                              <Select
+                                value={newCourse.especialidadId}
+                                onValueChange={(value) => setNewCourse({ ...newCourse, especialidadId: value })}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Seleccione una especialidad" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {especialidades.map((esp) => (
+                                    <SelectItem key={esp.id} value={esp.id}>
+                                      {esp.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <p className="text-xs text-muted-foreground">
+                                La especialidad es requerida para cursos de 3ro en adelante
+                              </p>
+                            </div>
+                          )}
+
                           <Button onClick={handleAddCourse} className="w-full bg-primary hover:bg-primary/90">
                             Crear Curso
                           </Button>
@@ -1370,9 +1474,12 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nombre</TableHead>
+                      <TableHead>Curso</TableHead>
+                      <TableHead>Año</TableHead>
+                      <TableHead>División</TableHead>
+                      <TableHead>Turno</TableHead>
+                      <TableHead>Especialidad</TableHead>
                       <TableHead>Materias Asignadas</TableHead>
-                      <TableHead>Fecha de Creación</TableHead>
                       <TableHead className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <span>Acciones</span>
@@ -1387,7 +1494,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                   <TableBody>
                     {courses.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                           No hay cursos registrados
                         </TableCell>
                       </TableRow>
@@ -1401,9 +1508,27 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                           .filter((s) => assignedSubjectIds.includes(s.id))
                           .map((s) => s.name)
                         
+                        // Mapeo de año a texto
+                        const yearText = ["", "1ro", "2do", "3ro", "4to", "5to", "6to"][c.year] || c.year
+                        const divisionText = ["", "1ra", "2da", "3ra", "4ta", "5ta"][c.division] || c.division
+                        
                         return (
                           <TableRow key={c.id}>
-                            <TableCell>{c.name}</TableCell>
+                            <TableCell className="font-medium">{c.name}</TableCell>
+                            <TableCell>{yearText}</TableCell>
+                            <TableCell>{divisionText}</TableCell>
+                            <TableCell>
+                              <Badge variant={c.turno === "Mañana" ? "default" : "secondary"}>
+                                {c.turno}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {c.especialidad ? (
+                                <Badge variant="outline">{c.especialidad.name}</Badge>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
                             <TableCell>
                               {assignedSubjectNames.length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
@@ -1420,7 +1545,6 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                                 <span className="text-sm text-muted-foreground italic">Sin materias</span>
                               )}
                             </TableCell>
-                            <TableCell>{new Date(c.createdAt).toLocaleDateString()}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-2">
                                 <Button
@@ -1451,22 +1575,91 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Editar Curso</DialogTitle>
-                  <DialogDescription>Modifique el nombre del curso y gestione las materias asignadas</DialogDescription>
+                  <DialogDescription>Modifique el año, turno, especialidad y gestione las materias asignadas</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-6 py-4">
-                  {/* Nombre del Curso */}
+                  {/* Año */}
                   <div className="space-y-2">
-                    <Label>Nombre del Curso</Label>
-                    <Input
-                      value={editCourse.name}
-                      onChange={(e) => setEditCourse({ name: e.target.value })}
-                      onFocus={(e) => {
-                        e.target.setSelectionRange(e.target.value.length, e.target.value.length)
-                      }}
-                      placeholder="Ej: 3° A"
-                      autoComplete="off"
-                    />
+                    <Label>Año del Curso</Label>
+                    <Select
+                      value={editCourse.year.toString()}
+                      onValueChange={(value) => setEditCourse({ ...editCourse, year: parseInt(value), especialidadId: parseInt(value) < 3 ? "" : editCourse.especialidadId })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1ro</SelectItem>
+                        <SelectItem value="2">2do</SelectItem>
+                        <SelectItem value="3">3ro</SelectItem>
+                        <SelectItem value="4">4to</SelectItem>
+                        <SelectItem value="5">5to</SelectItem>
+                        <SelectItem value="6">6to</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+
+                  {/* División */}
+                  <div className="space-y-2">
+                    <Label>División</Label>
+                    <Select
+                      value={editCourse.division.toString()}
+                      onValueChange={(value) => setEditCourse({ ...editCourse, division: parseInt(value) })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1ra</SelectItem>
+                        <SelectItem value="2">2da</SelectItem>
+                        <SelectItem value="3">3ra</SelectItem>
+                        <SelectItem value="4">4ta</SelectItem>
+                        <SelectItem value="5">5ta</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Turno */}
+                  <div className="space-y-2">
+                    <Label>Turno</Label>
+                    <Select
+                      value={editCourse.turno}
+                      onValueChange={(value) => setEditCourse({ ...editCourse, turno: value as Turno })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Mañana">Mañana</SelectItem>
+                        <SelectItem value="Tarde">Tarde</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Especialidad (solo para 3ro en adelante) */}
+                  {editCourse.year >= 3 && (
+                    <div className="space-y-2">
+                      <Label>Especialidad *</Label>
+                      <Select
+                        value={editCourse.especialidadId}
+                        onValueChange={(value) => setEditCourse({ ...editCourse, especialidadId: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione una especialidad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {especialidades.map((esp) => (
+                            <SelectItem key={esp.id} value={esp.id}>
+                              {esp.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        La especialidad es requerida para cursos de 3ro en adelante
+                      </p>
+                    </div>
+                  )}
 
                   {/* Materias Asignadas */}
                   <div className="space-y-2">

@@ -18,10 +18,26 @@ export interface Subject {
   createdAt: string
 }
 
+// Especialidad
+export interface Especialidad {
+  id: string
+  name: string
+  descripcion?: string
+  createdAt: string
+}
+
+// Turno del curso
+export type Turno = "Mañana" | "Tarde"
+
 // Curso
 export interface Course {
   id: string
-  name: string
+  name: string // Generado automáticamente: "3ro 1ra - Informática - Mañana"
+  year: number // 1 al 6
+  division: number // 1 al 5
+  turno: Turno
+  especialidadId?: string | null // Solo para años 3-6
+  especialidad?: Especialidad // Populated cuando se hace join
   createdAt: string
 }
 

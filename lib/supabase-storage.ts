@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { User, Subject, Course, SubjectCourse, TeacherSubject, Logbook, ClassSession } from './types'
+import type { User, Subject, Course, SubjectCourse, TeacherSubject, Logbook, ClassSession, Especialidad } from './types'
 
 // Funciones para Usuarios
 export async function getUsers(): Promise<User[]> {
@@ -287,41 +287,95 @@ export async function deleteMultipleSubjects(ids: string[]): Promise<void> {
   }
 }
 
-// Funciones para Cursos
-export async function getCourses(): Promise<Course[]> {
-  return new Promise(async (resolve) => {
-    const { data, error } = await supabase
-      .from('courses')
-      .select('*')
-      .order('created_at', { ascending: false })
+// Funciones para Especialidades
+export async function getEspecialidades(): Promise<Especialidad[]> {
+  if (!supabase) {
+    console.error('Supabase no está configurado')
+    return []
+  }
 
-    if (error) {
-      console.error('Error fetching courses:', error)
-      resolve([])
-      return
-    }
+  const { data, error } = await supabase
+    .from('especialidades')
+    .select('*')
+    .order('name', { ascending: true })
 
-    resolve(
-      data.map((course) => ({
-        id: course.id,
-        name: course.name,
-        createdAt: course.created_at,
-      }))
-    )
-  })
+  if (error) {
+    console.error('Error fetching especialidades:', error)
+    return []
+  }
+
+  if (!data) {
+    return []
+  }
+
+  return data.map((esp) => ({
+    id: esp.id,
+    name: esp.name,
+    descripcion: esp.descripcion,
+    createdAt: esp.created_at,
+  }))
 }
 
-export async function addCourse(course: Omit<Course, 'id' | 'createdAt'>): Promise<Course> {
+// Funciones para Cursos
+export async function getCourses(): Promise<Course[]> {
   if (!supabase) {
-    throw new Error('Supabase no está configurado')
+    console.error('Supabase no está configurado')
+    return []
   }
 
   const { data, error } = await supabase
     .from('courses')
+    .select(`
+      *,
+      especialidad:especialidades(id, name, descripcion, created_at)
+    `)
+    .order('year', { ascending: true })
+    .order('turno', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching courses:', error)
+    return []
+  }
+
+  if (!data) {
+    return []
+  }
+
+  return data.map((course) => ({
+    id: course.id,
+    name: course.name,
+    year: course.year,
+    division: course.division,
+    turno: course.turno,
+    especialidadId: course.especialidad_id,
+    especialidad: course.especialidad ? {
+      id: course.especialidad.id,
+      name: course.especialidad.name,
+      descripcion: course.especialidad.descripcion,
+      createdAt: course.especialidad.created_at,
+    } : undefined,
+    createdAt: course.created_at,
+  }))
+}
+
+export async function addCourse(course: Omit<Course, 'id' | 'createdAt' | 'name'>): Promise<Course> {
+  if (!supabase) {
+    throw new Error('Supabase no está configurado')
+  }
+
+  // El nombre se genera automáticamente por el trigger en la base de datos
+  const { data, error } = await supabase
+    .from('courses')
     .insert({
-      name: course.name,
+      year: course.year,
+      division: course.division,
+      turno: course.turno,
+      especialidad_id: course.especialidadId || null,
     })
-    .select()
+    .select(`
+      *,
+      especialidad:especialidades(id, name, descripcion, created_at)
+    `)
     .single()
 
   if (error) {
@@ -332,23 +386,40 @@ export async function addCourse(course: Omit<Course, 'id' | 'createdAt'>): Promi
   return {
     id: data.id,
     name: data.name,
+    year: data.year,
+    division: data.division,
+    turno: data.turno,
+    especialidadId: data.especialidad_id,
+    especialidad: data.especialidad ? {
+      id: data.especialidad.id,
+      name: data.especialidad.name,
+      descripcion: data.especialidad.descripcion,
+      createdAt: data.especialidad.created_at,
+    } : undefined,
     createdAt: data.created_at,
   }
 }
 
-export async function updateCourse(id: string, updates: Partial<Omit<Course, 'id' | 'createdAt'>>): Promise<Course> {
+export async function updateCourse(id: string, updates: Partial<Omit<Course, 'id' | 'createdAt' | 'name'>>): Promise<Course> {
   if (!supabase) {
     throw new Error('Supabase no está configurado')
   }
 
   const updateData: any = {}
-  if (updates.name !== undefined) updateData.name = updates.name
+  if (updates.year !== undefined) updateData.year = updates.year
+  if (updates.division !== undefined) updateData.division = updates.division
+  if (updates.turno !== undefined) updateData.turno = updates.turno
+  if (updates.especialidadId !== undefined) updateData.especialidad_id = updates.especialidadId
 
+  // El nombre se actualiza automáticamente por el trigger
   const { data, error } = await supabase
     .from('courses')
     .update(updateData)
     .eq('id', id)
-    .select()
+    .select(`
+      *,
+      especialidad:especialidades(id, name, descripcion, created_at)
+    `)
     .single()
 
   if (error) {
@@ -359,6 +430,16 @@ export async function updateCourse(id: string, updates: Partial<Omit<Course, 'id
   return {
     id: data.id,
     name: data.name,
+    year: data.year,
+    division: data.division,
+    turno: data.turno,
+    especialidadId: data.especialidad_id,
+    especialidad: data.especialidad ? {
+      id: data.especialidad.id,
+      name: data.especialidad.name,
+      descripcion: data.especialidad.descripcion,
+      createdAt: data.especialidad.created_at,
+    } : undefined,
     createdAt: data.created_at,
   }
 }
